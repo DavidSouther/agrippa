@@ -1,0 +1,42 @@
+name: watch
+
+# Continuous synthetic-monitoring placeholder for the probers testing style.
+# Runs independent of any deploy so it can catch drift between deploys, not just
+# at merge/sync time. See docs/developer/TASKS.md and
+# ailly/developer/research/prober-synthetic-monitoring.md for why this runs here
+# (GitHub-hosted, outside the cluster it will eventually probe) instead of in
+# k3s or on a future in-cluster forgejo-runner.
+#
+# No target is deployed yet, so this is a no-op: it just logs cron-vs-actual
+# start time so the operator can observe GitHub Actions' real scheduling drift
+# before anything depends on it. Once staging is live, replace the placeholder
+# step below with the real `bats tests/agrippa.bats` run.
+#
+# To confirm failure alerts actually arrive before relying on them: temporarily
+# change the placeholder step's `exit 0` to `exit 1`, push, wait for a scheduled
+# or manually-dispatched run to fail, confirm a notification arrives, then
+# revert. GitHub emails the user who last edited a scheduled workflow by
+# default — check Settings > Notifications > Actions if nothing shows up.
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report schedule vs. actual start time
+        run: |
+          echo "event: ${{ github.event_name }}"
+          echo "cron (if scheduled): ${{ github.event.schedule }}"
+          echo "actual start (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+      - name: Placeholder — no live target to probe yet
+        run: |
+          echo "No staging or production target is deployed yet."
+          echo "TODO once a target is live, replace this step with:"
+          echo "  PUBLIC_HOST=davidsouther.com TRIPS_HOST=trips.davidsouther.com \\"
+          echo "  DASHBOARD_HOST=dashboard.davidsouther.com bats tests/agrippa.bats"
+          exit 0
