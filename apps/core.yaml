@@ -29,22 +29,26 @@ spec:
     syncOptions:
       - ServerSideApply=true
       - SkipDryRunOnMissingResource=true
-  # istiod self-patches its own webhooks' caBundle with its self-signed CA at
-  # startup and on every cert-rotation reconcile (live-verified this session:
-  # istiod-default-validator and istio-validator-istio-system both carry a
-  # non-empty caBundle the git-sourced manifest never sets), which would
-  # otherwise leave `core` permanently OutOfSync fighting istiod's own
-  # controller. Scoped to exactly those two webhook configs, not a blanket
-  # admissionregistration.k8s.io ignore -- cert-manager's and metallb's
-  # webhook configs stay diffed normally.
+  # istiod self-patches its own webhooks' caBundle (with its self-signed CA)
+  # AND failurePolicy (Ignore at chart-default -> Fail once istiod considers
+  # itself ready to serve validation) at startup and on every cert-rotation
+  # reconcile (both live-verified this session: istiod-default-validator and
+  # istio-validator-istio-system's live objects carry a non-empty caBundle
+  # and failurePolicy: Fail, neither of which the git-sourced manifest ever
+  # sets), which would otherwise leave `core` permanently OutOfSync fighting
+  # istiod's own controller. Scoped to exactly those two webhook configs and
+  # fields, not a blanket admissionregistration.k8s.io ignore -- cert-manager's
+  # and metallb's webhook configs stay diffed normally.
   ignoreDifferences:
     - group: admissionregistration.k8s.io
       kind: ValidatingWebhookConfiguration
       name: istiod-default-validator
       jqPathExpressions:
         - .webhooks[].clientConfig.caBundle
+        - .webhooks[].failurePolicy
     - group: admissionregistration.k8s.io
       kind: ValidatingWebhookConfiguration
       name: istio-validator-istio-system
       jqPathExpressions:
         - .webhooks[].clientConfig.caBundle
+        - .webhooks[].failurePolicy
