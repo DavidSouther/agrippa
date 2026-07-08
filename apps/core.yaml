@@ -60,16 +60,21 @@ spec:
     # every reconcile left `core` permanently OutOfSync once the Gateway
     # (Step 4) landed, live-verified this session (spec matched exactly,
     # including API-defaulted fields; only `.status` differed). Ignoring the
-    # whole `/status` subresource is standard practice for
-    # controller-managed status here -- the feature test itself still reads
-    # live `.status` directly via `kubectl get`, which this does not affect.
+    # whole `.status` subresource is standard practice for controller-managed
+    # status here -- the feature test itself still reads live `.status`
+    # directly via `kubectl get`, which this does not affect. Uses
+    # jqPathExpressions (jsonPointers, tried first, left both resources still
+    # OutOfSync against the live ServerSideApply-managed objects) to match
+    # the mechanism already proven to work for the webhook ignores above.
     - group: gateway.networking.k8s.io
       kind: Gateway
+      namespace: istio-ingress
       name: agrippa-gateway
-      jsonPointers:
-        - /status
+      jqPathExpressions:
+        - .status
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
+      namespace: argocd
       name: argocd
-      jsonPointers:
-        - /status
+      jqPathExpressions:
+        - .status
