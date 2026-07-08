@@ -31,7 +31,7 @@
 **Steps:**
 - [x] Step 0: API surface area
 - [x] Step 1: Wave `-10` — CRDs (Gateway API standard channel, Istio base)
-- [ ] Step 2: Wave `-5` — controllers and data plane (metallb, cert-manager, istiod/istio-cni/ztunnel)
+- [x] Step 2: Wave `-5` — controllers and data plane (metallb, cert-manager, istiod/istio-cni/ztunnel)
 - [ ] Step 3: Wave `0` — cluster config CRs (metallb pool, cert-manager SelfSigned→CA chain)
 - [ ] Step 4: Wave `5` — the shared Gateway, its certificate, the `externalIPs` reachability fix, the ArgoCD HTTPRoute
 - [ ] Step 5: Feature-test issuer-check correction (Q6), full GREEN, and the regression sweep

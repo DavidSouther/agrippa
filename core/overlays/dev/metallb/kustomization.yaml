@@ -1,7 +1,8 @@
-# Wave -5: metallb's L2-mode controller and speaker. Pinned metallb-native.yaml
-# manifest URL lands Step 2.
+# Wave -5: metallb's L2-mode controller and speaker. Pinned v0.16.1 (current
+# stable tag; re-checked at build against github.com/metallb/metallb/tags).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
   argocd.argoproj.io/sync-wave: "-5"
-resources: []   # pinned metallb-native.yaml URL lands Step 2
+resources:
+  - https://raw.githubusercontent.com/metallb/metallb/v0.16.1/config/manifests/metallb-native.yaml
