@@ -8,6 +8,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "5"
 spec:
+  name: smoke
   owner: smoke
   cluster:
     name: postgres
