@@ -10,3 +10,5 @@ resources:
   - metallb/
   - cert-manager/
   - istio-control/
+  - metallb-config.yaml
+  - cert-issuers.yaml

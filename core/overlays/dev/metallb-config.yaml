@@ -1,5 +1,6 @@
-# Wave 0: metallb's IP pool and L2 advertisement. Real specs (addresses,
-# ipAddressPools) land Step 3.
+# Wave 0: metallb's IP pool and L2 advertisement. Range re-derived this
+# session against `docker network inspect k3d-agrippa-dev` (subnet
+# 172.18.0.0/16; in-use addresses .2/.3/.4 only) -- .200-.250 has no conflict.
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:
@@ -7,6 +8,9 @@ metadata:
   namespace: metallb-system
   annotations:
     argocd.argoproj.io/sync-wave: "0"
+spec:
+  addresses:
+    - 172.18.255.200-172.18.255.250
 ---
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
@@ -15,3 +19,6 @@ metadata:
   namespace: metallb-system
   annotations:
     argocd.argoproj.io/sync-wave: "0"
+spec:
+  ipAddressPools:
+    - agrippa-pool
