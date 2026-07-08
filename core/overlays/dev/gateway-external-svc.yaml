@@ -1,6 +1,15 @@
 # Wave 5: supplemental Service that DNATs the k3d node IP's :80/:443 to the
-# auto-provisioned gateway pods (the `externalIPs` reachability fix). Real
-# spec lands Step 4.
+# auto-provisioned gateway pods (the `externalIPs` reachability fix). Selects
+# by the documented Istio Gateway-injection label
+# (gateway.networking.k8s.io/gateway-name: <gateway name>), reviewer-decided
+# against Istio's Gateway API docs -- robust regardless of the
+# auto-provisioned Service's own generated name
+# (agrippa-gateway-istio), since this Service selects the gateway PODS
+# directly, not that Service. 172.18.0.3 is the k3d server node's container
+# IP, re-derived this session (docker inspect
+# k3d-agrippa-dev-server-0 --format
+# '{{ (index .NetworkSettings.Networks "k3d-agrippa-dev").IPAddress }}');
+# drifts on cluster:down/up.
 apiVersion: v1
 kind: Service
 metadata:
@@ -8,3 +17,15 @@ metadata:
   namespace: istio-ingress
   annotations:
     argocd.argoproj.io/sync-wave: "5"
+spec:
+  externalIPs:
+    - 172.18.0.3
+  selector:
+    gateway.networking.k8s.io/gateway-name: agrippa-gateway
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+    - name: https
+      port: 443
+      targetPort: 443

@@ -1,4 +1,8 @@
-# Wave 5: the shared Gateway API Gateway. Real listeners land Step 4.
+# Wave 5: the shared Gateway API Gateway. Creating this object causes
+# istiod's Gateway API controller to auto-provision a Deployment + Service
+# for the gateway data plane in this same namespace (istio-ingress) -- that
+# auto-provisioned Service is not authored here (gateway-external-svc.yaml is
+# a separate, supplemental Service for the k3d externalIPs reachability fix).
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
@@ -6,3 +10,22 @@ metadata:
   namespace: istio-ingress
   annotations:
     argocd.argoproj.io/sync-wave: "5"
+spec:
+  gatewayClassName: istio
+  listeners:
+    - name: https
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: agrippa-gateway-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All
