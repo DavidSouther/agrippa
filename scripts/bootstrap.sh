@@ -27,5 +27,23 @@ bw get notes agrippa-age-dev \
   | kubectl --context "$CTX" apply -f -
 
 echo "bootstrap: sops-age trust root ready in namespace argocd"
-# stages 3-4 (KSOPS-enabled ArgoCD install, root app-of-apps apply) are not
-# yet implemented.
+
+# --- Stage 3: KSOPS-enabled ArgoCD install ---------------------------------
+# `kustomize build` (the mise-pinned 5.8.1, not kubectl's often-older bundled
+# kustomize) renders the pinned upstream install manifest plus the KSOPS
+# repo-server patch (apps/platform/argocd/kustomization.yaml), then
+# --server-side apply lands it: client-side apply's last-applied-configuration
+# annotation overflows on ArgoCD's own CRDs (notably Application), which is
+# why upstream's own install docs use --server-side --force-conflicts too.
+# `kubectl apply -k` is declarative/idempotent, so re-running this stage does
+# not restart or duplicate unrelated ArgoCD components.
+kustomize build apps/platform/argocd \
+  | kubectl --context "$CTX" apply --server-side --force-conflicts -f -
+
+# Confirm the KSOPS-patched repo-server actually finished rolling out (not
+# just accepted by the API server) before bootstrap reports success -- the
+# init container must run to completion or this never returns.
+kubectl --context "$CTX" -n argocd rollout status deployment/argocd-repo-server --timeout=300s
+
+echo "bootstrap: KSOPS-enabled ArgoCD installed in namespace argocd"
+# stage 4 (root app-of-apps apply) is not yet implemented.

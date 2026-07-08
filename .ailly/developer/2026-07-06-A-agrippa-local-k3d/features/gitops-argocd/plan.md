@@ -28,8 +28,8 @@
 **Patterns beat (`patterns:using-patterns` consulted):** No domain-object pattern applies — this feature-step has no typed application code, only infrastructure config (a `mise` task, ArgoCD `Application` CRDs, a kustomize install tree, one bats suite), mirroring `cluster-core-k3d`'s same conclusion. `newtype`, `domain-objects`, `type-states`, `parse-dont-validate`, `aggregate`, and the persistence patterns all require a typed domain model that does not exist here. Two patterns shape *how* the surface and its tests are written: **`arrange-act-assert`** for the one bats `@test` (setup/`run`/assert, matching the sibling suites), and **`errors-typed-untyped`**, resolved to the untyped side — a `mise` task's process exit code is the correct, sufficient failure signal for `bootstrap`, consumed only by an operator's shell and by bats; no in-process caller needs distinct typed failure modes. One additional pressure specific to this feature: the `sops-age` **Secret is a trust-root artifact, not a domain object** — it is created imperatively by `bootstrap` and never modeled as an application type, consistent with the "no typed domain model" conclusion above.
 
 **Steps:**
-- [ ] Step 0: API surface area
-- [ ] Step 1: Trust root — namespace, `sops-age` Secret, `.sops.yaml` dev recipient
+- [x] Step 0: API surface area
+- [x] Step 1: Trust root — namespace, `sops-age` Secret, `.sops.yaml` dev recipient
 - [ ] Step 2: KSOPS-enabled ArgoCD install
 - [ ] Step 3: App-of-apps skeleton and root self-management (feature test green)
 - [ ] Step 4: Idempotency, `test:feature` exclusion, and regression safety
