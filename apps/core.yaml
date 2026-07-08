@@ -58,23 +58,29 @@ spec:
     # (Programmed/Accepted conditions, addresses, attachedRoutes) -- none of
     # which the git-sourced manifest (spec-only, no status:) ever sets, so
     # every reconcile left `core` permanently OutOfSync once the Gateway
-    # (Step 4) landed, live-verified this session (spec matched exactly,
-    # including API-defaulted fields; only `.status` differed). Ignoring the
-    # whole `.status` subresource is standard practice for controller-managed
-    # status here -- the feature test itself still reads live `.status`
-    # directly via `kubectl get`, which this does not affect. Uses
-    # jqPathExpressions (jsonPointers, tried first, left both resources still
-    # OutOfSync against the live ServerSideApply-managed objects) to match
-    # the mechanism already proven to work for the webhook ignores above.
+    # (Step 4) landed. Both `jsonPointers: [/status]` and
+    # `jqPathExpressions: [.status]` were tried first and, live-verified this
+    # session, left both resources still OutOfSync against the live
+    # ServerSideApply-managed objects (confirmed via `argocd app get --core`,
+    # which kept reporting these two OutOfSync after each self-heal sync
+    # attempt, even though a field-by-field spec comparison matched exactly).
+    # `managedFieldsManagers` is the mechanism actually built for this case --
+    # ignore whatever field manager(s) other than argocd-controller own on
+    # this resource -- and is confirmed via `--show-managed-fields` to be
+    # the correct owner set: istio.io/gateway-controller and pilot-discovery
+    # both write the `status` subresource on Gateway; pilot-discovery alone
+    # writes it on HTTPRoute. The feature test itself still reads live
+    # `.status` directly via `kubectl get`, which this does not affect.
     - group: gateway.networking.k8s.io
       kind: Gateway
       namespace: istio-ingress
       name: agrippa-gateway
-      jqPathExpressions:
-        - .status
+      managedFieldsManagers:
+        - istio.io/gateway-controller
+        - pilot-discovery
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
       namespace: argocd
       name: argocd
-      jqPathExpressions:
-        - .status
+      managedFieldsManagers:
+        - pilot-discovery

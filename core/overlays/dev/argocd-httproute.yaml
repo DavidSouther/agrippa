@@ -16,6 +16,17 @@ spec:
   hostnames:
     - argocd.127.0.0.1.nip.io
   rules:
-    - backendRefs:
+    # `matches` is authored explicitly, matching the Gateway API CRD's own
+    # schema default for an omitted rule (PathPrefix "/"): live-verified this
+    # session that ArgoCD's pre-sync diff does not replicate this particular
+    # nested-array structural default the way it replicates scalar defaults
+    # (e.g. backendRefs[].group/kind below), which otherwise left `core`
+    # permanently OutOfSync comparing an omitted `matches:` against the
+    # API-defaulted live value.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
         - name: argocd-server
           port: 443
