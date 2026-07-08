@@ -1,7 +1,8 @@
 # Wave -5: cert-manager's static install (bundles its own CRDs, controller,
-# and webhook). Pinned cert-manager.yaml manifest URL lands Step 2.
+# and webhook). Pinned v1.20.3 (current stable minor line).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
   argocd.argoproj.io/sync-wave: "-5"
-resources: []   # pinned cert-manager.yaml URL lands Step 2
+resources:
+  - https://github.com/cert-manager/cert-manager/releases/download/v1.20.3/cert-manager.yaml

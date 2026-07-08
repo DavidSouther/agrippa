@@ -7,3 +7,6 @@ kind: Kustomization
 resources:
   - gateway-api/
   - istio-base/
+  - metallb/
+  - cert-manager/
+  - istio-control/
