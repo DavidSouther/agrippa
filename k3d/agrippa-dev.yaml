@@ -1,0 +1,45 @@
+# Local Agrippa development cluster (k3d).
+#
+# The k3d-only equivalent of roadmap item 1 (Cluster core). It stands in for the
+# production cloud-init/Terraform/DigitalOcean node provisioning.
+#
+# Applied by `mise run cluster:up` (and removed by `mise run cluster:down`).
+#
+# Design notes (see the Cluster core feature-step design):
+#   - Single node (1 server, 0 agents): lightest footprint for a laptop dev box;
+#     k3s schedules workloads on the server, so no separate agent is needed. No
+#     GPU pool (production-only).
+#   - ServiceLB (Klipper) disabled: metallb owns LoadBalancer IPs locally, and the
+#     two controllers conflict if both are enabled.
+#   - Traefik disabled: the Istio Gateway is this platform's ingress, so k3s's
+#     bundled Traefik is redundant and would compete for :80/:443.
+#   - Host ports 80/443 published through the k3d loadbalancer proxy (a separate
+#     proxy from the disabled ServiceLB) so `http(s)://<host>` reaches the Istio
+#     Gateway once Networking lands.
+#   - k3s image pinned for reproducibility across k3d upgrades.
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: agrippa-dev
+servers: 1
+agents: 0
+image: rancher/k3s:v1.35.5-k3s1
+ports:
+  - port: "80:80"
+    nodeFilters:
+      - loadbalancer
+  - port: "443:443"
+    nodeFilters:
+      - loadbalancer
+options:
+  k3d:
+    wait: true
+    timeout: "120s"
+  k3s:
+    extraArgs:
+      - arg: "--disable=servicelb"
+        nodeFilters:
+          - "server:*"
+      - arg: "--disable=traefik"
+        nodeFilters:
+          - "server:*"

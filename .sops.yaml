@@ -1,0 +1,12 @@
+# Path-scoping rule only; PLACEHOLDER recipient.
+#
+# The real dev age public key is generated once via `age-keygen` and its
+# private half stored in Bitwarden as `agrippa-age-dev`, per this project's
+# key-custody policy (DEVELOPMENT.md ## Secrets) -- never fabricated here.
+# Replace the placeholder below with that public key once it exists.
+#
+# The `secrets/prod/.*` rule and prod recipient are a seam, added with the
+# cloud cycle (out of scope for this local-k3d project).
+creation_rules:
+  - path_regex: ^secrets/dev/.*$
+    age: "AGE-PLACEHOLDER-REPLACE-WITH-REAL-agrippa-age-dev-PUBLIC-KEY"
