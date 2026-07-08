@@ -26,7 +26,7 @@ conftest/chainsaw/bats/mise — build to `DEVELOPMENT.md`, `ROUTING.md`, and
 - [x] Feature 0: Prerequisites (mise + test harness)    (no dependencies, can start now)
 - [x] Feature 1: Cluster core                           Depends on: Feature 0
 - [x] Feature 2: GitOps (ArgoCD)                         Depends on: Feature 1
-- [ ] Feature 3: Networking (Istio + cert-manager)       Depends on: Feature 1; applied via Feature 2
+- [x] Feature 3: Networking (Istio + cert-manager)       Depends on: Feature 1; applied via Feature 2
 - [ ] Feature 4: Storage (Postgres + Valkey)             Depends on: Feature 1, Feature 2
 - [ ] Feature 5: Auth (Keycloak)                         Depends on: Feature 4. Parallel with: Feature 6, Feature 7, Feature 8; shared contract: storage class + DB naming
 - [ ] Feature 6: Git hosting (Forgejo)                   Depends on: Feature 4. Parallel with: Feature 5, Feature 7, Feature 8; shared contract: storage class + DB naming
