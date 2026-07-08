@@ -1,0 +1,8 @@
+# Wave 5: the shared Gateway API Gateway. Real listeners land Step 4.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: agrippa-gateway
+  namespace: istio-ingress
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"

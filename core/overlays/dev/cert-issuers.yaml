@@ -1,0 +1,22 @@
+# Wave 0: the SelfSigned -> CA issuer chain. Real specs land Step 3.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: agrippa-local-ca
+  namespace: cert-manager
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: agrippa-ca
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"

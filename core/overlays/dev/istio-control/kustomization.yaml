@@ -1,0 +1,8 @@
+# Wave -5: Istio ambient's control plane and data plane -- istiod, the
+# istio-cni node agent (with k3s CNI path overrides), and ztunnel. Pinned
+# chart versions and the CNI path values land Step 2.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "-5"
+helmCharts: []  # istiod/cni/ztunnel charts land Step 2
