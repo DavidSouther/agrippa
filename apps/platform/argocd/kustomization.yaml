@@ -79,4 +79,7 @@ patches:
       metadata:
         name: argocd-cm
       data:
-        kustomize.buildOptions: "--enable-alpha-plugins --enable-exec"
+        # --enable-helm additionally allows `helmCharts:` inflation in other
+        # kustomizations this repo-server renders (Networking feature-step's
+        # `core` layer sources Istio's base/istiod/cni/ztunnel charts this way).
+        kustomize.buildOptions: "--enable-alpha-plugins --enable-exec --enable-helm"

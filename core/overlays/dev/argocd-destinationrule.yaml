@@ -1,0 +1,11 @@
+# Wave 5: Istio-native TLS re-origination to the HTTPS argocd-server:443
+# backend (reviewer-decided mechanism -- SIMPLE + insecureSkipVerify, not a
+# Gateway API BackendTLSPolicy; see plan.md's "Resolved by the long-loop
+# reviewer" entry 3). Real spec lands Step 4.
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: argocd-server-tls
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"

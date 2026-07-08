@@ -1,0 +1,9 @@
+# Wave 5: the shared Gateway's TLS certificate, issued by the local CA. Real
+# spec lands Step 4.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: agrippa-gateway-tls
+  namespace: istio-ingress
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"

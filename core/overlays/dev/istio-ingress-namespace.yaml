@@ -1,0 +1,8 @@
+# Wave 5: the namespace the shared Gateway and its auto-provisioned data
+# plane live in.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: istio-ingress
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"

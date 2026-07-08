@@ -1,0 +1,10 @@
+# Wave -10: Istio's `base` chart (CRDs shared across istiod/cni/ztunnel).
+# helmCharts: [] until Step 1 fills in the pinned chart version; namespace.yaml
+# is a standing stub because `helm template` (unlike `helm install
+# --create-namespace`) never emits a Namespace object on its own.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "-10"
+resources: []   # namespace.yaml wired in Step 1
+helmCharts: []  # base chart lands Step 1
