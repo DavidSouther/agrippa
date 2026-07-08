@@ -4,3 +4,5 @@ resources:
   - namespace.yaml
   - cnpg-operator/
   - ../../../secrets/dev/storage
+  - postgres-cluster.yaml
+  - valkey/

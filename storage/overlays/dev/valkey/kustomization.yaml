@@ -1,7 +1,43 @@
-# Wave 0: the shared standalone Valkey instance. Chart pin and values land
-# Step 3 (research:public against the official valkey-io/valkey-helm chart).
+# Wave 0: the shared standalone Valkey instance. Chart pinned to 0.10.0
+# (appVersion 9.1.0, the latest release on https://valkey.io/valkey-helm/'s
+# own index.yaml as of this build -- research:public). releaseName "valkey"
+# collapses valkey.fullname to the bare "valkey" Service/pod-label name
+# (verified against the chart's own _helpers.tpl: "if release name contains
+# chart name, use release name only"), matching this design's
+# valkey.storage.svc:6379 / app.kubernetes.io/name=valkey assumptions.
+# auth.aclUsers is a map keyed by username; each user's password is read
+# from usersExistingSecret at a key defaulting to that same username (chart
+# templates/_helpers.tpl + deploy_valkey.yaml), so smoke-valkey's `default`/
+# `smoke` keys need no explicit passwordKey override. The chart requires a
+# `default` user whenever auth.enabled is true (_helpers.tpl
+# validateAuthConfig), hence its entry below alongside `smoke`.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
   argocd.argoproj.io/sync-wave: "0"
-helmCharts: []   # valkey chart lands Step 3
+helmCharts:
+  - name: valkey
+    repo: https://valkey.io/valkey-helm/
+    version: 0.10.0
+    releaseName: valkey
+    namespace: storage
+    # helm template semantics: kustomize's helmCharts inflation renders
+    # (and would otherwise plain-apply) the chart's helm.sh/hook: test Pod
+    # (valkey-test-auth-existing) as a literal, permanent Pod object -- ArgoCD
+    # doesn't understand Helm hook annotations, so it isn't a one-shot `helm
+    # test` run. skipTests excludes it (design's own flagged "helm template
+    # semantics" edge case, confirmed live at build).
+    skipTests: true
+    valuesInline:
+      auth:
+        enabled: true
+        usersExistingSecret: smoke-valkey
+        aclUsers:
+          default:
+            permissions: "~* &* +@all"
+          smoke:
+            permissions: "~smoke:* +@all"
+      dataStorage:
+        enabled: true
+        className: local-path
+        requestedSize: 512Mi
