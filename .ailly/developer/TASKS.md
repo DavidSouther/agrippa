@@ -262,3 +262,19 @@ From the feature-step `2026-07-06-A-agrippa-local-k3d/features/storage-postgres-
   Extract to a shared reusable helper when Feature 5 actually repeats it and the correct
   interface becomes evident; the conservative default per the project's YAGNI posture is inline
   now, extract on the rule-of-three (when the second real caller proves the shape).
+
+## Test-quality: bats non-final `[[ ]]` doesn't gate (cross-cutting)
+
+- **`tests/networking.bats` and `tests/storage.bats` carry non-final, non-terminal bare
+  `[[ ... ]]` content assertions (e.g. a `*healthy*` glob match, a `2xx/3xx` regex) that do NOT
+  actually fail the test on a mismatch** — confirmed empirically against this repo's bats
+  1.13.0: `set -e` exempts bash conditional compounds (`[[ ]]`) unless they're the test's final
+  command, unlike `[ ... ]` or a `grep -q` pipeline, which do reliably gate. Only each suite's
+  `[ "$status" -eq 0 ]` checks and truly-final `[[ ]]` assertions are load-bearing today; the
+  in-between content assertions currently pass even on a wrong value. Discovered by the
+  `feature-flags-flagsmith` and `git-hosting-forgejo` design-phase authors while writing their
+  own feature tests (both rewrote their own new suites to the safe `grep -q`/`[ ]` idiom
+  `gitops.bats` already uses). Fix: audit `networking.bats`/`storage.bats` and replace any
+  non-final bare `[[ ]]` with an idiom that actually gates. Low urgency (both suites are
+  currently green for the right underlying reason, live-verified by their own build phases) but
+  a latent false-GREEN risk on any future regression in those two components.

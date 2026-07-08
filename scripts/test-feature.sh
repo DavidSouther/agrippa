@@ -62,13 +62,26 @@ fi
 # feature cluster; storage.bats -> drives the GitOps-reconciled `storage` layer
 # (CloudNativePG Cluster/Database, Valkey, sops-encrypted credentials) against
 # the long-lived agrippa-dev cluster via ArgoCD, not this throwaway feature
-# cluster; rotate-keys.bats -> a standalone sops/age mechanism check
-# with a stubbed Bitwarden, needs no cluster at all).
+# cluster; git-hosting.bats -> drives the GitOps-reconciled `platform` layer (the
+# Forgejo server, its Postgres database/role, its sealed admin+DB credentials, and
+# its Gateway HTTPRoute) against the long-lived agrippa-dev cluster via ArgoCD, not
+# this throwaway feature cluster; auth.bats -> drives the GitOps-reconciled `platform` layer (the
+# Keycloak Operator + Keycloak/KeycloakRealmImport CRs, reached through the shared
+# Istio Gateway) against the long-lived agrippa-dev cluster via ArgoCD, not this
+# throwaway feature cluster; observability.bats -> drives the GitOps-reconciled `observability`
+# layer (the Grafana LGTM stack + Alloy, reached through the shared Istio
+# Gateway) against the long-lived agrippa-dev cluster via ArgoCD, not this
+# throwaway feature cluster; feature-flags.bats -> drives the GitOps-reconciled
+# `platform` layer (the Flagsmith Helm release + its HTTPRoute/Database/
+# sops-encrypted credentials, reached through the shared Istio Gateway) against
+# the long-lived agrippa-dev cluster via ArgoCD, not this throwaway feature
+# cluster; rotate-keys.bats -> a standalone sops/age mechanism
+# check with a stubbed Bitwarden, needs no cluster at all).
 probe_suites=()
 for f in tests/*.bats; do
   [ -e "$f" ] || continue
   case "$(basename "$f")" in
-    agrippa.bats|harness.bats|preflight.bats|cluster-core.bats|gitops.bats|networking.bats|storage.bats|rotate-keys.bats) continue ;;
+    agrippa.bats|harness.bats|preflight.bats|cluster-core.bats|gitops.bats|networking.bats|storage.bats|git-hosting.bats|auth.bats|observability.bats|feature-flags.bats|rotate-keys.bats) continue ;;
   esac
   probe_suites+=("$f")
 done
