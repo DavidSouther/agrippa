@@ -33,7 +33,7 @@
 **Steps:**
 - [x] Step 0: API surface area (file layout, `.sops.yaml` fix, `apps/storage.yaml` SSA seam)
 - [x] Step 1: Wave `-10` — namespaces + the CNPG operator
-- [x] Step 2: Wave `-5` — sealing and wiring the `smoke` KSOPS credentials
+- [ ] Step 2: Wave `-5` — sealing and wiring the `smoke` KSOPS credentials — **BLOCKED**: credentials sealed and committed, but the generator is temporarily reverted to inert (`generators: []`) because enabling it live-errors `storage` into `ComparisonError`. Root cause: the ArgoCD repo-server's existing KSOPS install (`apps/platform/argocd/kustomization.yaml`, from the already-completed `gitops-argocd` feature-step) never mounts the `ksops` binary at kustomize's own exec-plugin path, only at `/usr/local/bin/ksops` — a real, still-open upstream gap (viaduct-ai/kustomize-sops#283/#207/#164). The fix touches the shared ArgoCD repo-server Deployment, outside this feature-step's own scope — see the *Blocked at Step 2* section below for the drafted fix.
 - [ ] Step 3: Wave `0` — the shared `postgres` Cluster and the Valkey instance
 - [ ] Step 4: Wave `5` — the `smoke` `Database` CR
 - [ ] Step 5: Full GREEN — the credential + ACL proof, and the regression sweep
@@ -609,3 +609,76 @@ shapes and names; the build confirms the exact spellings" posture, not open
 decisions this gate must resolve. No irreversible, out-of-recorded-scope, or
 underdetermined item remains for this artifact. The `*Draft*` marker is removed
 (changed to `*Reviewed 2026-07-08*`).
+
+## Blocked at Step 2 (2026-07-08, Build phase)
+
+Steps 0 and 1 landed clean and are live-verified Synced/Healthy (commits
+`5ae825e`, `a7d88b2`). Step 2's credential-sealing half is done and committed
+(`85b03f8`): `secrets/dev/storage/postgres/smoke.enc.yaml` and
+`secrets/dev/storage/valkey/smoke.enc.yaml` are real, correctly-shaped
+ciphertext under the fixed `agrippa-age-dev` recipient, and
+`secret-generator.yaml` (`kind: ksops`) is committed and correct. But wiring
+the generator live (`secrets/dev/storage/kustomization.yaml`'s
+`generators: [secret-generator.yaml]`) pushed the `storage` Application into
+`ComparisonError`, not `Synced/Healthy` -- so Step 2's own test
+(`kubectl -n storage get secret smoke-db`) does not pass, and every later
+step depends on this credential path working. That commit has been reverted
+(`generators: []`, matching the Step 0 stub) to restore `storage` to
+Synced/Healthy; the sealed files and generator config stay committed,
+untouched, and ready to re-enable the moment this is unblocked.
+
+**Root cause (live-verified against the `argocd-repo-server` pod).** The
+`gitops-argocd` feature-step's KSOPS repo-server patch
+(`apps/platform/argocd/kustomization.yaml`) mounts the `ksops` binary at
+`/usr/local/bin/ksops` (the upstream README's documented path) and sets
+`XDG_CONFIG_HOME=/.config`, but that install was never exercised against a
+real `kind: ksops` generator until this feature-step's own
+`secret-generator.yaml` -- the first one this repo has ever committed.
+Exec'ing into the live `argocd-repo-server` pod confirmed: the ksops-patched
+`kustomize` binary is correctly in place (`kustomize version` ->
+`v5.3.0+ksops.v4.5.1`), `XDG_CONFIG_HOME`/`SOPS_AGE_KEY_FILE` are correctly
+set, and the `sops-age` trust root is correctly mounted at
+`/.config/sops/age/key.txt` -- but `/.config/kustomize/plugin/` does not
+exist at all. Even with the ksops-patched binary and
+`--enable-alpha-plugins --enable-exec`, kustomize still resolves
+`kind: ksops` through its standard exec-plugin loader and fails with
+`unable to find plugin root - tried: ... ('/.config/kustomize/plugin';
+homed in $XDG_CONFIG_HOME) ...` -- confirmed via `research:public` as a
+real, still-open upstream documentation gap in `viaduct-ai/kustomize-sops`
+(issues #283, #207, #164 all report this exact symptom with this exact
+install pattern; none show an accepted fix in the thread).
+
+**The drafted fix (researched, NOT applied -- out of this feature-step's own
+scope).** Mount the same `custom-tools` `ksops` binary a second time,
+directly at kustomize's conventional exec-plugin path
+(`<plugin_root>/<apiVersion>/<lowercased kind>/<Kind>`), alongside the
+existing `/usr/local/bin/ksops` mount, in
+`apps/platform/argocd/kustomization.yaml`'s `argocd-repo-server` container
+patch:
+
+```yaml
+              - name: custom-tools
+                mountPath: /.config/kustomize/plugin/viaduct.ai/v1/ksops/ksops
+                subPath: ksops
+```
+
+This is additive to the existing `volumeMounts:` list (alongside the
+`/usr/local/bin/kustomize` and `/usr/local/bin/ksops` mounts already there),
+needs no new volume, and was NOT committed or pushed: it edits the live,
+self-managing ArgoCD repo-server Deployment -- a cluster-wide control-plane
+component owned by the already-completed `gitops-argocd` feature-step, not
+this one -- which this session's own escalation criteria (an action outside
+this feature-step's own scope) flags as a stop-and-report condition rather
+than something to fix autonomously.
+
+**Why this matters beyond Step 2.** Step 3's `managed.roles[].passwordSecret`
+and the Valkey release's `auth.usersExistingSecret` both reference these same
+KSOPS-decrypted Secrets; Steps 3-5 cannot be built or live-verified until
+this is resolved. This is the feature-step's actual blocker.
+
+**Recommended next step (human decision required):** authorize either (a)
+this feature-step's scope to include the one-line `apps/platform/argocd/
+kustomization.yaml` fix above (it is additive, low-risk, and matches the
+upstream-documented shape), or (b) a separate fix committed under the `plat`
+scope (matching `gitops-argocd`'s own convention) before resuming this
+feature-step's Step 2.
