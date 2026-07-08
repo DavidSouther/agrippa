@@ -1,0 +1,10 @@
+# Wave -10: the CloudNativePG operator's CRDs, controller, and webhook. Must
+# be Ready before the wave-0 shared Cluster syncs. Chart pin lands Step 1
+# (research:public against https://cloudnative-pg.github.io/charts).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "-10"
+resources:
+  - namespace.yaml
+helmCharts: []   # cloudnative-pg chart lands Step 1

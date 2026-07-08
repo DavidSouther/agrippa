@@ -1,0 +1,8 @@
+# Namespace storage: the shared Postgres Cluster, the Valkey instance, and
+# every per-app credential Secret KSOPS decrypts live here.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: storage
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
