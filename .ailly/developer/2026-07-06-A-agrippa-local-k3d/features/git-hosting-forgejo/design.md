@@ -1,7 +1,5 @@
 # Feature Design: Git hosting (Forgejo server, Postgres-backed)
 
-*Draft 2026-07-08*
-
 > Feature-step design (feature-loop shape) inside the Project-Shape session
 > `2026-07-06-A-agrippa-local-k3d`. This is **Feature 6: Git hosting (Forgejo)**
 > of that project's plan: a Postgres-backed platform service landing in the
@@ -586,70 +584,81 @@ left **RED** (baseline recorded below); the build phase turns it green after
 sealing the credentials, committing the `forgejo` composition and the three
 shared-list appends, wiring the sync seam, and letting ArgoCD reconcile it.
 
-### Open Artifact Decisions
+### Resolved by the long-loop reviewer (2026-07-08)
 
-Concrete artifact choices this design invents that are not fixed by a skill
-template, an existing project convention, or the cleared `research.md` (whose
-reviewer block already settled the chart choice, the runner deferral, the
-Valkey-not-wired decision, the `forgejo` slug, the dev hostname, the
-`secrets/dev/platform/forgejo/` own-path scope, the landing mechanism, and the
-`apps/platform.yaml` sync-seam pair — all stated above as conclusions, not
-surfaced here).
+These were the design's Open Artifact Decisions: concrete artifact choices this
+design invents that are not fixed by a skill template, an existing project
+convention, or the cleared `research.md` (whose reviewer block already settled the
+chart choice, the runner deferral, the Valkey-not-wired decision, the `forgejo`
+slug, the dev hostname, the `secrets/dev/platform/forgejo/` own-path scope, the
+landing mechanism, and the `apps/platform.yaml` sync-seam pair). Each is decided to
+its proposed conservative default. None triggered an escalation: every item is
+reversible within this step's own subtree, none exceeds the scope the design
+records, and repo conventions determine each default.
 
-**The credential Secret names — `forgejo-admin` (admin `username`/`password`)
-and `forgejo-db` (Postgres `kubernetes.io/basic-auth`), and the KSOPS-generator
-resource (`secret-generator.yaml`, `kind: ksops`):** the concrete spellings the
-chart values (`admin.existingSecret`, `additionalConfigFromEnvs`), the
-`managed.roles[].passwordSecret`, and the feature test all bind to.
-Proposed: `forgejo-admin` and `forgejo-db` as named throughout, following
-Storage's `<slug>-db` fixture convention (`smoke-db` → `forgejo-db`) and adding
-`<slug>-admin` for Forgejo's admin credential. `kind: ksops` is KSOPS's required
-generator kind, not a free choice. Recorded because the feature test binds to
-these exact names.
+**1. The credential Secret names (`forgejo-admin`, `forgejo-db`) and the KSOPS
+generator resource (`secret-generator.yaml`, `kind: ksops`). Decided:
+`forgejo-admin` and `forgejo-db` as proposed, generator file
+`secret-generator.yaml`.** Follows Storage's live `<slug>-db` fixture convention,
+verified against `storage/overlays/dev/postgres-cluster.yaml` where the `smoke`
+role carries `passwordSecret.name: smoke-db`, extended with `<slug>-admin` for the
+admin credential. `kind: ksops` is KSOPS's required generator kind, not a free
+choice. The feature test already binds `ADMIN_SECRET="forgejo-admin"`, so this is
+the value-bound conservative default.
 
-**The committed-secret path convention and file split — `secrets/dev/platform/
-forgejo/{admin,db-storage,db-forgejo}.enc.yaml` (layer/component-first,
-per-credential filename):** adapts Storage's `secrets/dev/storage/<store>/
-<slug>.enc.yaml` to the `platform` layer, where the grouping key is the component
-(`forgejo`) and the leaf is the credential (and, for the DB credential, its target
-namespace).
-Proposed: `admin.enc.yaml` (Secret `forgejo-admin`, ns `forgejo`),
-`db-storage.enc.yaml` (Secret `forgejo-db`, ns `storage`, for CNPG), and
-`db-forgejo.enc.yaml` (Secret `forgejo-db`, ns `forgejo`, same password, for the
-pod). The alternative — `secrets/dev/platform/forgejo/<store>/<slug>.enc.yaml`
-mirroring Storage literally — was rejected as over-nested for a single component.
-The `db-<ns>` split is driven by the cross-namespace constraint (next entry);
-confirm the naming and the split fit intent.
+**2. The committed-secret path and file split
+(`secrets/dev/platform/forgejo/{admin,db-storage,db-forgejo}.enc.yaml`). Decided:
+as proposed.** Adapts Storage's `secrets/dev/<layer>/<component>/…` layout to the
+`platform` layer with a per-credential leaf, and the `db-<ns>` leaf split is forced
+by the cross-namespace constraint decided in item 5. Reversible because this step
+owns the whole `secrets/dev/platform/forgejo/` path; the literal-mirror
+`<store>/<slug>` alternative is rightly rejected as over-nested for one component.
 
-**The overlay's authored-CR and namespace file names — `forgejo-database.yaml`,
-`httproute.yaml`, `namespace.yaml`, and the `forgejo/` subdir name:** the
-internal file layout of `platform/overlays/dev/forgejo/`.
-Proposed: as in the Specification's layout block, mirroring `storage/overlays/
-dev/`'s per-component-subdir-plus-top-level-CR shape. Reversible; a rename
-touches only this step's own files.
+**3. The overlay authored-CR and namespace file names (`forgejo-database.yaml`,
+`httproute.yaml`, `namespace.yaml`, subdir `forgejo/`). Decided: as proposed.**
+Mirrors the realized `storage/overlays/dev/` per-component-subdir shape. Fully
+reversible: a rename touches only this step's own files, so matching the existing
+sibling layout is the conservative default.
 
-**`gitea.admin.passwordMode` — `keepUpdated` (default, re-asserts the sealed
-password on every pod restart) vs `initialOnlyNoReset` (sets it once, never
-resets):** the reconcile behavior of the sealed admin credential.
-Proposed: `keepUpdated`, keeping the sealed Secret authoritative (matching the
-"the sealed value is the source of truth" discipline). Reversible one-value edit;
-noted because it is a genuine chart-behavior choice research surfaced but did not
-settle.
+**4. `gitea.admin.passwordMode` (`keepUpdated` vs `initialOnlyNoReset`). Decided:
+`keepUpdated`.** It is the chart default and it keeps the sealed Secret
+authoritative, re-asserting the credential on every pod restart, matching this
+project's "the sealed value is the source of truth" discipline so a restart can
+never silently strand the admin password away from what git holds. Reversible
+one-value edit if drift-on-restart is ever unwanted.
 
-**The DB password's cross-namespace delivery — the same generated password
-sealed into two `forgejo-db` Secrets, one ns `storage` (for CNPG's
-`managed.roles[].passwordSecret`) and one ns `forgejo` (for Forgejo's
-`additionalConfigFromEnvs` `secretKeyRef`, which is namespace-local):** the
-mechanism reconciling one credential across the two namespaces that need it.
-Proposed: two KSOPS `files:` targets in this step's own generator, both from one
-in-memory password (§ The `forgejo` database…). The alternatives — a single
-Secret plus a cross-namespace copier (e.g. a reflector controller), or delivering
-the DB password to Forgejo by a non-Secret indirection — were rejected as heavier
-(a new controller) or less auditable. The two-copies form keeps ownership wholly
-inside `secrets/dev/platform/forgejo/`, needs no new component, and both copies
-are ciphertext-only in git. The exact `additionalConfigFromEnvs` key/env-var
-spelling is build-confirmed against the pinned chart; the contract (one generated
-DB password, slug `forgejo`, sealed in both namespaces) is fixed.
+**5. The DB password cross-namespace delivery (one generated password sealed into
+two `forgejo-db` Secrets, ns `storage` for CNPG and ns `forgejo` for the pod).
+Decided: the two-copies form as proposed.** The constraint is real and verified:
+CNPG reads `managed.roles[].passwordSecret` from the Cluster's own namespace
+(`storage`), while Forgejo's `additionalConfigFromEnvs` `secretKeyRef` is
+namespace-local to the pod (`forgejo`). The two alternatives are heavier or weaker:
+a reflector/copier controller adds a standing component to the trust surface, and a
+non-Secret indirection is less auditable. Sealing one in-memory password into two
+ciphertext-only manifests keeps ownership wholly inside this step's
+`secrets/dev/platform/forgejo/` path, adds no controller, and is the auditable
+default. The exact `additionalConfigFromEnvs` env-var spelling stays build-confirmed
+against the pinned chart; the contract (one password, slug `forgejo`, sealed in both
+namespaces) is fixed.
+
+**Reviewer verification (2026-07-08).** The design's load-bearing claims were
+checked live and hold. The RED baseline reproduces exactly: `tests/git-hosting.bats`
+aborts at THEN 1 (line 141's `grep -q '"version"'`), exit 1, with `platform`
+Synced/Healthy on `argocd.yaml`-only content and no `forgejo` namespace, no side
+effects. `scripts/test-feature.sh` excludes `git-hosting.bats` in its probe-suite
+`case` list. `apps/core.yaml` and `apps/storage.yaml` both carry the cited
+`ServerSideApply`/`SkipDryRunOnMissingResource` syncOptions plus the
+`ServerSideDiff=true` compare-options annotation, while `apps/platform.yaml` does
+not yet, correctly the shared "lands once" edit. `core/overlays/dev/gateway-cert.yaml`
+carries the single `argocd.127.0.0.1.nip.io` SAN today, so the one-line `dnsNames`
+append is specified correctly, and the `smoke` `managed.roles[]` entry matches the
+proposed `forgejo` append shape. The cross-cutting bats claim was reproduced
+empirically against this repo's pinned bats 1.13.0: a non-final bare `[[ false ]]`
+does NOT fail a test (errexit exempts the conditional compound), while `[ … ]`,
+simple commands, and a truly-final `[[ ]]` all gate. The `TASKS.md` record
+(`## Test-quality: bats non-final [[ ]] doesn't gate`) is accurate, and this step's
+own `tests/git-hosting.bats` is free of the footgun: every content assertion uses
+`grep -q`/`grep -qF` or `[ … ]`, and its only `[[` is inside a comment (line 138).
 
 ## Feature Test
 

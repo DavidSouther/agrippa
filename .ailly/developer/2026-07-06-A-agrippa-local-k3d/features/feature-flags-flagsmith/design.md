@@ -1,6 +1,6 @@
 # Feature Design: Feature flags (Flagsmith)
 
-*Draft 2026-07-08*
+*Reviewed 2026-07-08*
 
 > Feature-step design (feature-loop shape) inside the Project-Shape session
 > `2026-07-06-A-agrippa-local-k3d`. This is **Feature 7: Feature flags
@@ -560,6 +560,97 @@ API directly (proving Postgres) while `/` renders the admin UI. The alternative 
 single `/` → frontend route relying on the frontend's internal `/api` proxy —
 cannot expose the API `/health` endpoint the research settled on. The exact Service
 names/ports and health path are build-verified.
+
+### Resolved by the long-loop reviewer (2026-07-08)
+
+This block resolves, in one pass per Ailly's Draft Gate Enforcement convention, this
+design's four Open Artifact Decisions above. A separately dispatched long-loop reviewer
+read this feature-step's `design.md` cold, re-verified its load-bearing claims against
+the working tree and the running `k3d-agrippa-dev` cluster, and researched each open
+item against the in-repo contracts (`DEVELOPMENT.md` § Secrets; the realized
+`storage/overlays/dev/` per-component-subdir layout; `apps/storage.yaml` /
+`apps/core.yaml`; `.sops.yaml`'s `secrets/dev/.*` creation rule) and this feature's
+cleared `research.md` reviewer block, whose settled inputs (chart choice,
+hand-authored `HTTPRoute`, the three Secret names + one-password-two-Secrets mechanic,
+the browser-reset bootstrap, the `flagsmith.127.0.0.1.nip.io` hostname, the
+feature-test reach, and the no-Redis finding) were checked for faithful transcription
+and carried through unchanged. **No separate design-intent review exists for this
+feature-step** (no `reviews/` subfolder — checked), so there are no intent-review OPEN
+questions to fold in; this pass resolves only the design's own four items. Each was
+decided to the conservative, reversible default; no escalation trigger (irreversible,
+out of recorded scope, or underdetermined) fired, so this draft gate is cleared (marker
+now `*Reviewed 2026-07-08*`).
+
+The RED baseline and load-bearing claims were re-verified live and hold exactly as
+recorded, cluster **read only** and left untouched: the `platform` Application is
+`Synced/Healthy` rendering only `Application/argocd` (so `platform/overlays/dev` carries
+exactly `resources: [argocd.yaml]` live — no `flagsmith/` subdir, no `secrets/dev/platform/`);
+`curl -k` to both `/` and `/health` on the flagsmith host returns **404** (THEN 1 aborts
+first, the RED discriminator); `scripts/test-feature.sh` excludes `feature-flags.bats`
+in its probe-suite `case` list; and the `apps/platform.yaml` sync-seam citation is
+correct — `apps/storage.yaml` and `apps/core.yaml` both carry the
+`argocd.argoproj.io/compare-options: ServerSideDiff=true` annotation **and** the
+`syncOptions: [ServerSideApply=true, SkipDryRunOnMissingResource=true]` pair verbatim,
+which `apps/platform.yaml` (today `syncPolicy.automated` only) must gain — the design's
+Cross-step touches names both halves correctly.
+
+The author's bats-footgun self-guard was verified **empirically** against this repo's
+pinned bats 1.13.0 (a throwaway suite): a bare non-final `[[ false ]]` mid-test **passes**
+the test (the footgun is real), while `[[ … ]] || false` — including THEN 1's exact
+`^(2[0-9][0-9]|3[0-9][0-9])$` regex on a `404` value — **fails** it (the guard gates
+reliably), as do a single-bracket `[ … ]` and a `grep -q` pipeline. In
+`tests/feature-flags.bats` every content assertion is therefore genuinely gating: THEN 1
+and THEN 2 carry the `|| false` guard, and THEN 3's `[ "$output" = "200" ]` is a
+single-bracket simple command (and the test's terminal command besides), which gates
+without a guard. **No non-gating assertion was found, so no fix was applied** — the suite
+is clean, and the cross-cutting `TASKS.md` item covers only the two older sibling suites
+(`networking.bats`/`storage.bats`), not this one.
+
+**1. The `flagsmith` namespace choice (dedicated `flagsmith` ns vs. a shared `platform`
+ns). Decided: a dedicated `flagsmith` namespace.** This is every other component's
+own-namespace convention (`istio-ingress`, `cnpg-system`, `storage`) and the chart's own
+`helm install -n flagsmith --create-namespace` idiom; the committed RED test already binds
+to `flagsmith.127.0.0.1.nip.io` and the design's HTTPRoute/Secrets sit in a `flagsmith`
+namespace, so a dedicated namespace is the spelling the baseline was captured against. A
+shared `platform` namespace would break the per-component isolation the three concurrent
+platform siblings (Auth/Forgejo/Flagsmith) rely on. Reversible (a change touches only this
+step's manifests + the test's host/NS constants); in recorded scope; determined by
+convention — no escalation.
+
+**2. The overlay file/subdir layout (`platform/overlays/dev/flagsmith/` with
+`namespace.yaml` / `helm/` / `httproute.yaml` / `database.yaml`, and
+`secrets/dev/platform/flagsmith/` with `database-url.enc.yaml` / `secret-key.enc.yaml` /
+`secret-generator.yaml`). Decided: accept as proposed.** It mirrors the realized
+`storage/overlays/dev/` per-component-subdir + top-level-CR shape (live-confirmed: the
+storage overlay uses `valkey/`, `cnpg-operator/` subdirs with inline CRs) and extends
+`DEVELOPMENT.md` § Secrets' `secrets/dev/<layer>/<component>/` grouping to the platform
+layer; `.sops.yaml`'s existing `secrets/dev/.*` creation rule already matches every new
+path, so no per-path sops config is needed. The per-component secrets subdir (not one
+shared `secrets/dev/platform/` generator) is the correct default — it keeps the three
+concurrent siblings off a shared-append generator file. Reversible (a rename touches only
+this step's own files); no escalation.
+
+**3. The DSN key spelling, admin bootstrap email, and org/project name. Decided:
+`DATABASE_URL`, `admin@agrippa.local`, and `agrippa` (org and project).** `DATABASE_URL`
+is the chart's own documented example key for
+`databaseExternal.urlFromExistingSecret.key` (the worked example in `research/public.md`);
+`admin@agrippa.local` is a deliberately non-routable dev address consistent with the
+manual browser password-reset bootstrap (decision 3 — no real mail delivery is wired or
+needed); `agrippa` for both org and project matches the `agrippa-*` naming family used
+throughout. All three are reversible build-phase values — nothing is sealed or
+bootstrapped yet, so re-spelling any of them is a re-seal / re-bootstrap step with no
+committed artifact to migrate. No escalation.
+
+**4. The HTTPRoute path split (`/health` → API, `/` → frontend, two rules on one route).
+Decided: the two-rule split.** It is the only route shape that exposes the API `/health`
+endpoint through the Gateway — the assertion (THEN 3) that makes the test prove the
+DB-backed service and not merely UI reachability, the reach the cleared `research.md`
+settled on — while `/` renders the admin UI (THEN 1). The single-`/`→frontend
+alternative cannot reach `/health`: the frontend proxies `/api/*` internally, not the
+API's `/health`. Gateway API's longest-prefix-wins precedence routes `/health` ahead of
+`/`, so the two rules coexist on one route. Reversible (a route-manifest edit); the exact
+Service names/ports and health path stay build-verified against the pinned chart as the
+design records (the test is RED regardless of which spelling wins). No escalation.
 
 ## Feature Test
 

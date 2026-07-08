@@ -1,6 +1,6 @@
 # Feature Design: Auth (Keycloak via the Keycloak Operator)
 
-*Draft 2026-07-08*
+*Reviewed 2026-07-08*
 
 > Feature-step design (feature-loop shape) inside the Project-Shape session
 > `2026-07-06-A-agrippa-local-k3d`. This is **Feature 5: Auth (Keycloak)** of that
@@ -662,6 +662,104 @@ Proposed: as stated. The alternative — folding the keycloak-namespace DB Secre
 `secrets/dev/storage/` too — was rejected because it is not a storage credential and
 would muddy Storage's per-store grouping. Forgejo and Flagsmith will each add their
 own `secrets/dev/platform/<component>/` sibling under this same new prefix.
+
+### Resolved by the long-loop reviewer (2026-07-08)
+
+A separately dispatched long-loop reviewer read this feature-step's `design.md` cold,
+re-verified its live claims against the working tree and the running `k3d-agrippa-dev`
+cluster (read-only), and decided the three Open Artifact Decisions above to the
+conservative default. No `reviews/` intent-review subfolder exists, so there were no
+intent-review questions to fold in. No escalation trigger (irreversible, out of
+recorded scope, or underdetermined) fired, so this design draft gate is cleared (top
+marker now `Reviewed`). The two scrutiny points the design surfaces — the
+two-namespace credential materialization and the `apps/platform.yaml` sync seam — were
+independently re-verified and require no change (recorded as entries 4-5 for the audit
+trail). CRD field/status-string spellings and the exact Operator version pin remain
+correctly deferred to build-time `research:public`, unchanged by this review.
+
+**1. The dev hostname — `auth.127.0.0.1.nip.io`. Decided: adopt as proposed
+(service-name-direct, following ArgoCD's precedent).** Reversible (a hostname string;
+the feature test binds to it but that coupling is within this feature-step), in
+recorded scope, and determinate. Re-verified independently: no `auth`/`sso`/`keycloak`
+prod host is recorded anywhere in the repo — `tests/agrippa.bats` records only
+`davidsouther.com` (`PUBLIC_HOST`), `trips.davidsouther.com` (`TRIPS_HOST`), and
+`dashboard.davidsouther.com` (`DASHBOARD_HOST`), and `ROUTING.md` treats Keycloak as
+*in-cluster OIDC* gating paths (`davidsouther.com/agathon`), never as its own
+hostname. So the full-prod-mirror form (Grafana's `dashboard.davidsouther.com`
+precedent, which exists only because that prod host is recorded) has nothing to
+mirror; the service-name-direct scheme applied to a host with no recorded prod name is
+exactly ArgoCD's live precedent (`argocd.127.0.0.1.nip.io` in
+`core/overlays/dev/gateway-cert.yaml`, live-verified). Conservative default = the
+proposed spelling.
+
+**2. The namespace, CR, Secret, and realm names — `keycloak` namespace; `keycloak`
+`Keycloak` CR (→ `keycloak-service`); `keycloak-db` / `keycloak-admin` Secrets;
+`agrippa` realm. Decided: adopt as proposed.** Reversible, in recorded scope, and
+determinate from an established convention. The database = role = slug = `keycloak`
+naming is exactly the app-slug convention Storage established and named Keycloak as
+the worked example of (`storage-postgres-valkey/design.md` § User Journey uses `{name:
+keycloak, login: true, passwordSecret: {name: keycloak-db}}` verbatim); the live
+`postgres` Cluster's only current role is `smoke`, confirming the append shape. The
+one genuinely free pick, the realm id `agrippa`, sits in the same `agrippa-*` family
+as the live `agrippa-dev`/`agrippa-gateway`/`agrippa-ca` objects and is more
+descriptive than `dev`/`local`. Conservative default = the proposed names.
+
+**3. The committed-secret path convention under `platform/` —
+`secrets/dev/platform/keycloak/<secret>.enc.yaml`. Decided: adopt as proposed.**
+Reversible, in recorded scope, and a clean generalization of the settled Storage
+convention. Storage's live layout is `secrets/dev/storage/<store>/<slug>.enc.yaml`
+(verified: `secrets/dev/storage/postgres/smoke.enc.yaml`,
+`secrets/dev/storage/valkey/smoke.enc.yaml`), so `<layer>=platform`,
+`<component>=keycloak` is the natural extension, and its self-contained
+`generators:`-only sub-kustomization mirrors `secrets/dev/storage/`'s exactly. The
+`.sops.yaml` creation rule `^secrets/dev/.*$` already matches
+`secrets/dev/platform/…` (verified in-file), so no `.sops.yaml` change is required.
+The `storage`-namespace copy of the DB credential stays under Storage's *existing*
+`secrets/dev/storage/postgres/keycloak.enc.yaml` grouping unchanged. Conservative
+default = the proposed prefix.
+
+**4. Scrutiny — the two-namespace credential materialization. Verified; no change; no
+escalation.** The design's reasoning is sound and its "reaching into Storage's scope"
+reading is correct, not an overreach. One generated password is materialized as two
+namespace-scoped Secret objects (`keycloak-db` in `storage` for CNPG's
+`managed.roles[].passwordSecret`, resolved in the Cluster's namespace; `keycloak-db`
+in `keycloak` for the `Keycloak` CR's `spec.db.*Secret`, resolved in the CR's
+namespace) because Kubernetes Secrets are namespace-scoped and the reviewer-settled
+Keycloak/CNPG namespace split forces the two consumers apart. The `storage`-namespace
+copy (a new `secrets/dev/storage/postgres/keycloak.enc.yaml` + one filename appended
+to `secrets/dev/storage/secret-generator.yaml`) plus the one `managed.roles[]` entry
+appended to `storage/overlays/dev/postgres-cluster.yaml` is **precisely** the
+consumption contract Storage's own design published for Features 5-8:
+`storage-postgres-valkey/design.md` names Keycloak as the literal worked example of a
+later consumer that "(a) seals a random credential into
+`secrets/dev/storage/postgres/keycloak.enc.yaml` … (b) appends one entry to …
+`spec.managed.roles[]` — `{name: keycloak, login: true, passwordSecret: {name:
+keycloak-db}}` … (c) authors its own `Database` CR." The live generator currently
+carries `postgres/smoke.enc.yaml` + `valkey/smoke.enc.yaml`, and the live Cluster's
+`managed.roles[]` carries only `smoke` — appending one more of each is the same
+"later feature appends to a settled append-only shared list" shape as the Gateway
+`dnsNames` append (which this step also makes), not a re-opening of Storage's
+cleaned-up feature-step. It does **not** need flagging beyond the design's own
+Cross-step-touches note. Escalation triggers: none — additive, reversible, and
+explicitly in Storage's recorded contract scope.
+
+**5. Scrutiny — the `apps/platform.yaml` sync seam. Verified correct and internally
+consistent; no change; no escalation.** Live-verified: `apps/platform.yaml` carries no
+seam (empty `syncOptions`, no `compare-options` annotation), while `apps/core.yaml`
+and `apps/storage.yaml` both carry the full two-part seam this design copies — the
+`argocd.argoproj.io/compare-options: ServerSideDiff=true` annotation **and**
+`syncOptions: [ServerSideApply=true, SkipDryRunOnMissingResource=true]` (confirmed in
+both files and on the live `core`/`storage` Applications, whose syncOptions read
+`["ServerSideApply=true","SkipDryRunOnMissingResource=true"]`). The design specifies
+both halves, cites the correct `argoproj/argo-cd#22151` rationale that both files' own
+comments document (`ServerSideApply=true` alone auto-enables Structured Merge Diff,
+which mispredicts webhook-defaulted CRD fields and leaves the Application permanently
+OutOfSync; `ServerSideDiff=true` forces a real dry-run diff), and correctly frames the
+touch as additive, idempotent, and last-writer-wins-safe across the three
+`platform`-layer siblings (Auth/Forgejo/Flagsmith), with Observability landing in its
+own `observability` Application (live-confirmed separate, does not touch this file).
+Internally consistent with the cited `apps/core.yaml`/`apps/storage.yaml` pattern.
+Escalation triggers: none.
 
 ## Feature Test
 

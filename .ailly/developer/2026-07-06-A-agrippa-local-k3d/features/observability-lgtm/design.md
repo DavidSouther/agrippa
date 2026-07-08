@@ -1,6 +1,6 @@
 # Feature Design: Observability (LGTM + Alloy)
 
-*Draft 2026-07-08*
+*Reviewed 2026-07-08*
 
 > Feature-step design (feature-loop shape) inside the Project-Shape session
 > `2026-07-06-A-agrippa-local-k3d`. This is **Feature 8: Observability (LGTM +
@@ -549,42 +549,88 @@ want live re-verification at build time. The feature test is therefore left
 **RED** (baseline recorded below); the build phase turns it green after committing
 the `observability` composition and letting ArgoCD reconcile it.
 
-### Open Artifact Decisions
+### Resolved by the long-loop reviewer (2026-07-08)
 
-Concrete artifact choices this design invents that are not fixed by a skill
-template, an existing project convention, or the cleared `research.md`. (The
-composition pattern, the SQLite/`local-path` choice, the `admin`/`admin` dev
-credential, the dev hostname, the Alloy pipelines, the Mimir shape, the
-`ServerSideDiff` seam, the "no DestinationRule" decision, and the ztunnel
-deferral are all resolved above from the cleared research and the parent design
-— stated as conclusions, not surfaced here.)
+The design-gate reviewer read this artifact cold, resolved its Open Artifact
+Decisions to the conservative default, verified the load-bearing claims live, and
+cleared the draft marker. No item escalated. The verification results (items 3–6)
+are recorded here alongside the artifact decisions (items 1–2) to keep one audit
+trail, per the long-loop recording contract.
 
-**`observability/overlays/dev/` internal layout and directory names
+**1. `observability/overlays/dev/` internal layout and directory names
 (`loki/`, `tempo/`, `mimir/`, `grafana/`, `alloy/`, `namespace.yaml`,
-`grafana-httproute.yaml`):** whether each chart gets its own nested kustomization
-directory (the Storage `cnpg-operator/`+`valkey/` shape) versus a single flat
-`helmCharts:` list in one kustomization.
-Proposed: **one nested directory per chart** (mirroring Storage), because the
-#6058 namespace patch and per-chart sync-waves are cleanest scoped per
-sub-kustomization, and a flat single kustomization would tangle five charts'
-`valuesInline`, patches, and waves into one file.
+`grafana-httproute.yaml`). Decided: one nested kustomization directory per
+chart, mirroring the Storage step's `cnpg-operator/`+`valkey/` shape.** This is
+the design's own proposal and the conservative default: it reuses the already-
+cleared multi-chart precedent verbatim (Prior Art), and the per-chart #6058
+`metadata.namespace` patch, per-chart `valuesInline:`, and per-chart sync-wave
+each scope cleanly to their own sub-kustomization, where a single flat
+`helmCharts:` list would tangle five charts' values/patches/waves into one file.
+Reversible (a mechanical directory restructure), in recorded scope, and
+determined by an existing project convention — no escalation trigger fires.
 
-**The authored object names (`HTTPRoute` `grafana`, `Namespace` `observability`,
-the `observability` namespace itself, and each chart `releaseName`):** the
-concrete spellings this step's manifests and its feature test bind to.
-Proposed: `observability` namespace (the layer-name = namespace convention every
-sibling layer follows, and the ArgoCD Application's own header comment); HTTPRoute
-`grafana` (component-named, matching `argocd-httproute.yaml`'s `argocd`);
-per-chart `releaseName`s `loki`/`tempo`/`mimir`/`grafana`/`alloy` (bare
-component names, matching Valkey's `releaseName: valkey`, which collapse each
-chart's `fullname` to the bare Service/pod-label name the datasource URLs and
-HTTPRoute `backendRefs` assume). Settle them here since consumers (the feature
-test, the datasource URLs) reference them.
+**2. The authored object names (`HTTPRoute` `grafana`, `Namespace`
+`observability`, each chart `releaseName` `loki`/`tempo`/`mimir`/`grafana`/
+`alloy`). Decided: adopt the proposed spellings.** `observability` namespace
+follows the layer-name = namespace convention every sibling layer already uses
+(and the `observability` ArgoCD Application's own header comment); `HTTPRoute`
+`grafana` is component-named exactly as the landed `argocd-httproute.yaml` names
+its route `argocd`; the bare-component `releaseName`s match Valkey's
+`releaseName: valkey`, collapsing each chart's `fullname` to the bare
+Service/pod-label name the datasource URLs and the HTTPRoute `backendRefs`
+assume. These are the names the feature test and the datasource URLs bind to, so
+they are settled here rather than deferred. Reversible before build, in scope,
+convention-determined — no escalation.
 
-**The dev hostname `dashboard.davidsouther.com.127.0.0.1.nip.io`:** already fixed
-by the parent design's resolved decision 6 and `tests/agrippa.bats`'s
-`DASHBOARD_HOST` — a derived conclusion, not open, but repeated here because the
-feature test binds to it directly.
+**3. The dev hostname `dashboard.davidsouther.com.127.0.0.1.nip.io`. Decided:
+not open — a derived conclusion, confirmed.** Fixed by the parent design's
+resolved decision 6 and `tests/agrippa.bats`'s `DASHBOARD_HOST`; the feature test
+binds to it directly. Nothing to invent.
+
+**4. `reviews/` intent-review subfolder. Decided: none present, nothing to
+resolve.** The feature-step folder contains only `design.md`, `research.md`, and
+`research/` — no `reviews/` subfolder exists, so there is no intent review to
+reconcile in this pass.
+
+**5. Load-bearing claims verified live against the `agrippa-dev` cluster.**
+(a) `tests/observability.bats` matches this design's own report: THEN 1 asserts
+anonymous `/api/dashboards/home` → 401, THEN 2 asserts `admin`/`admin` → 200,
+THEN 3 asserts `/api/datasources` → 200 enumerating `loki`/`prometheus`/`tempo`
+types. (b) The RED baseline is confirmed live: the `observability` Application is
+`Synced Healthy` on the `resources: []` placeholder (THEN 0 passes), the
+`observability` namespace does not exist, and the running suite aborts at THEN 1
+(`[ "$output" = "401" ]` fails — the routeless Gateway answers 404), exactly as
+recorded. (c) `scripts/test-feature.sh` excludes `observability.bats` from the
+throwaway-cluster probe loop (line 84 case list) — confirmed present.
+
+**6. THEN 3 datasource assertions: bats non-final `[[ ]]` footgun and the
+`/api/datasources` JSON-shape risk. Decided: both fixed in
+`tests/observability.bats` (this feature-step's own test), whitespace-tolerant
+and gating.** As authored, THEN 3 carried four bare `[[ ]]` content assertions
+(the `\n200` status, and the `loki`/`prometheus`/`tempo` type matches); only the
+final one (`tempo`) actually gates. Verified empirically against this repo's
+pinned bats 1.13.0 (throwaway suite): under bats' `set -e`, a **non-final** bare
+`[[ ]]` compound does **not** fail the test on mismatch, while a single-bracket
+`[ ]`, a `grep -q` pipeline, and a *final* `[[ ]]` all do — the exact footgun
+`TASKS.md` records against the `networking.bats`/`storage.bats` siblings. So the
+status, `loki`, and `prometheus` checks were latent false-GREENs. Separately, the
+design flagged that the compact `"type":"loki"` match assumes `/api/datasources`
+returns compact JSON: research (`research:public`, Grafana Data source HTTP API
+docs + wire-format search) found the docs pretty-print with a space after the
+colon (`"type": "elasticsearch"`) for readability while the on-wire format is
+very likely compact (Go `json.Encoder`), but this cannot be fully settled without
+a live Grafana (the layer is empty). Both are resolved together by rewriting the
+four assertions to gating, whitespace-tolerant idioms: the status via
+`[ "${output##*$'\n'}" = "200" ]` (single bracket, gates) and each type via
+`echo "$output" | grep -q '"type": *"loki"'` (pipeline gates; `: *` tolerates
+zero-or-more spaces, so it matches compact **and** pretty JSON). Verified
+empirically that the new idioms pass on both compact and pretty samples and
+correctly fail on a wrong status or a missing datasource, and that the edited
+suite still yields the recorded RED baseline (aborts at THEN 1) against the live
+cluster. Mechanical, reversible, in-scope, and matching the `grep -q` idiom
+`gitops.bats` already uses and the sibling design authors already applied to
+their own suites — no escalation. The build phase should still re-verify the live
+`/api/datasources` shape, but the assertion is now robust either way.
 
 ## Feature Test
 

@@ -139,8 +139,18 @@ wait_for_observability_synced_healthy() {
     -u "${GRAFANA_USER}:${GRAFANA_PASSWORD}" \
     "https://${DASHBOARD_HOST}/api/datasources"
   [ "$status" -eq 0 ]
-  [[ "$output" == *$'\n'200 ]]
-  [[ "$output" == *'"type":"loki"'* ]]
-  [[ "$output" == *'"type":"prometheus"'* ]]
-  [[ "$output" == *'"type":"tempo"'* ]]
+  # The last line of $output is the HTTP status (curl -w '\n%{http_code}'); the
+  # body precedes it. Use gating idioms only: under bats' set -e a non-final bare
+  # `[[ ... ]]` compound does NOT fail the test on mismatch (verified empirically
+  # against bats 1.13.0; see TASKS.md "bats non-final [[ ]] doesn't gate"), so a
+  # `[[ ]]` here would silently pass on a wrong status or a missing datasource.
+  # A single-bracket `[ ]` and a `grep -q` pipeline both gate correctly.
+  [ "${output##*$'\n'}" = "200" ]
+  # The `: *` tolerates zero-or-more spaces after the colon, so these match both
+  # Grafana's compact wire JSON (`"type":"loki"`) and any pretty-printed shape
+  # (`"type": "loki"`) -- robust to the exact /api/datasources serialization,
+  # which the build phase should still re-verify against the live Grafana.
+  echo "$output" | grep -q '"type": *"loki"'
+  echo "$output" | grep -q '"type": *"prometheus"'
+  echo "$output" | grep -q '"type": *"tempo"'
 }
