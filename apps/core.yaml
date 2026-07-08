@@ -52,3 +52,23 @@ spec:
       jqPathExpressions:
         - .webhooks[].clientConfig.caBundle
         - .webhooks[].failurePolicy
+    # Gateway API's Gateway/HTTPRoute both carry a registered `status`
+    # subresource that istiod's Gateway API controller populates
+    # (Programmed/Accepted conditions, addresses, attachedRoutes) -- none of
+    # which the git-sourced manifest (spec-only, no status:) ever sets, so
+    # every reconcile left `core` permanently OutOfSync once the Gateway
+    # (Step 4) landed, live-verified this session (spec matched exactly,
+    # including API-defaulted fields; only `.status` differed). Ignoring the
+    # whole `/status` subresource is standard practice for
+    # controller-managed status here -- the feature test itself still reads
+    # live `.status` directly via `kubectl get`, which this does not affect.
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: agrippa-gateway
+      jsonPointers:
+        - /status
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: argocd
+      jsonPointers:
+        - /status
