@@ -53,6 +53,17 @@ patches:
                   - name: custom-tools
                     mountPath: /usr/local/bin/ksops
                     subPath: ksops
+                  # kustomize's own exec-plugin loader resolves `kind: ksops`
+                  # generators via $XDG_CONFIG_HOME/kustomize/plugin/<apiVersion>/
+                  # <lowercased kind>/<Kind>, a separate path from the
+                  # /usr/local/bin/ksops mount above (which only covers direct
+                  # CLI invocation) -- a real, still-open gap in the upstream
+                  # install docs (viaduct-ai/kustomize-sops#283, #207, #164).
+                  # Without this mount, any committed `kind: ksops` generator
+                  # fails with "unable to find plugin root".
+                  - name: custom-tools
+                    mountPath: /.config/kustomize/plugin/viaduct.ai/v1/ksops/ksops
+                    subPath: ksops
                   - name: sops-age
                     mountPath: /.config/sops/age
                 env:
