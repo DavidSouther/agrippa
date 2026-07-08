@@ -173,3 +173,21 @@ From the feature-step `2026-07-06-A-agrippa-local-k3d/features/cluster-core-k3d/
 + **k3s version parity with production.** Local pins the k3d default image for
   reproducibility; matching production's exact k3s version is a cloud-cycle
   concern.
+
+## Feature-step deferred decisions: GitOps (ArgoCD app-of-apps, KSOPS/age, local bootstrap)
+
+From the feature-step `2026-07-06-A-agrippa-local-k3d/features/gitops-argocd/design.md`:
+
++ **Terraform / cloud-init injection of `sops-age` and the `overlays/prod` environment.** Deferred
+  to the cloud cycle. The `mise run bootstrap` task and the `secrets/prod/.*` / prod-recipient seam
+  are the local stand-ins; these seams are preserved in the git history so the cloud-cycle
+  implementation has a clear contract to replace them with.
+
++ **ArgoCD UI ingress and Tier-1 gating.** Reached by `kubectl port-forward` locally until
+  Networking lands. The Istio-Gateway HTTPRoute and (production) Cloudflare Access on the ArgoCD UI
+  are Networking / cloud concerns, deferred to the Networking feature-step and cloud cycle.
+
++ **metallb placement.** Declared in `core` layer and reconciled at a sync-wave. May move into
+  the manual `bootstrap` step if a chicken-and-egg surfaces (metallb needed before ArgoCD can pull
+  an image on a LoadBalancer IP), with no rework elsewhere. Local k3d's node port-map makes this
+  unlikely, since image pulls use the node's own network, not a LoadBalancer IP.

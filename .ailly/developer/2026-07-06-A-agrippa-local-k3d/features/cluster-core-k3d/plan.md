@@ -25,10 +25,18 @@
 **Patterns beat (`patterns:using-patterns` consulted):** No domain-object pattern applies. This feature-step has no typed application code, only infrastructure config (a k3d YAML manifest, two mise/bash tasks, one bats suite). `newtype`, `domain-objects`, `type-states`, `parse-dont-validate`, `aggregate`, and the persistence patterns all require a typed domain model that does not exist here, so none are invoked. Two patterns shape *how* the surface and its tests are written, not the surface itself: **`arrange-act-assert`** for the one bats `@test` (the existing setup/`run`/assert shape `tests/cluster-core.bats` and its sibling suites already follow), and **`errors-typed-untyped`**, resolved to the untyped side. A task's process exit code is the correct, sufficient failure signal for `mise run cluster:up`/`cluster:down`, consumed only by an operator's shell and by bats; no in-process caller needs to match distinct typed failure modes.
 
 **Steps:**
-- [ ] Step 0: API surface area
-- [ ] Step 1: Single-node cluster stands up and reaches Ready
-- [ ] Step 2: ServiceLB and Traefik disabled at the k3s layer
-- [ ] Step 3: Host port-map, idempotent re-run, and the `test:feature` exclusion (feature test goes green)
+- [x] Step 0: API surface area
+- [x] Step 1: Single-node cluster stands up and reaches Ready
+- [x] Step 2: ServiceLB and Traefik disabled at the k3s layer
+- [x] Step 3: Host port-map, idempotent re-run, and the `test:feature` exclusion (feature test goes green)
+
+**Checkbox note (2026-07-08, long-loop coordinator):** these four steps were
+already fully built and live-verified — the plan's own *Resolved by the
+long-loop reviewer (2026-07-06)* block below executed every step's claim
+against the running `agrippa-dev` cluster and found nothing needing
+correction — but the checkboxes above were never ticked during that build.
+Re-verified again now (`bats tests/cluster-core.bats` → `ok 1`) before
+ticking, per this session's own regression pass.
 
 ## Step 0: API surface area
 
