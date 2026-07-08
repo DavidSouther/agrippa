@@ -6,3 +6,4 @@ resources:
   - ../../../secrets/dev/storage
   - postgres-cluster.yaml
   - valkey/
+  - smoke-database.yaml
