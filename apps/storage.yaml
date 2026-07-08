@@ -6,6 +6,19 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "1"
+    # `syncOptions: ServerSideApply=true` (below) auto-enables ArgoCD's
+    # Structured Merge Diff strategy application-wide -- the same mechanism
+    # apps/core.yaml documents for its Gateway/HTTPRoute OutOfSync symptom
+    # (argoproj/argo-cd#22151). SMD predicts live state via a local
+    # simulation rather than a real API-server dry-run, so it mispredicts
+    # CNPG's mutating-webhook-defaulted Cluster fields (bootstrap.initdb,
+    # affinity, monitoring, postgresql.parameters, etc. -- none set in git,
+    # all added by the CNPG webhook) -- live-verified: storage.status.resources
+    # showed only `Cluster postgres` OutOfSync once Step 3's Cluster synced,
+    # with every extra field CNPG-controller-owned. Force Server-Side Diff
+    # (a real dry-run apply, so admission/defaulting participates correctly),
+    # mirroring apps/core.yaml's fix exactly.
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: default
   source:
