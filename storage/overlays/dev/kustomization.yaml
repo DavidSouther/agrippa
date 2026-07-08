@@ -8,3 +8,4 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - cnpg-operator/
+  - ../../../secrets/dev/storage

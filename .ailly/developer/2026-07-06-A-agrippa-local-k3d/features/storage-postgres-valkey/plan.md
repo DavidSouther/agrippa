@@ -33,7 +33,7 @@
 **Steps:**
 - [x] Step 0: API surface area (file layout, `.sops.yaml` fix, `apps/storage.yaml` SSA seam)
 - [x] Step 1: Wave `-10` — namespaces + the CNPG operator
-- [ ] Step 2: Wave `-5` — sealing and wiring the `smoke` KSOPS credentials
+- [x] Step 2: Wave `-5` — sealing and wiring the `smoke` KSOPS credentials
 - [ ] Step 3: Wave `0` — the shared `postgres` Cluster and the Valkey instance
 - [ ] Step 4: Wave `5` — the `smoke` `Database` CR
 - [ ] Step 5: Full GREEN — the credential + ACL proof, and the regression sweep
