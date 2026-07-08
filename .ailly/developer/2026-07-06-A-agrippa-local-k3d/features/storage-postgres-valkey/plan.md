@@ -31,8 +31,8 @@
 **User story:** Given the bootstrapped `agrippa-dev` cluster with this Storage content committed and reconciled by ArgoCD into the `storage` layer — the CNPG operator, the shared Postgres `Cluster` `postgres` on `local-path`, the shared standalone Valkey instance, and the permanent `smoke` fixture — when an operator connects to database `smoke` as role `smoke` using the sops-encrypted, KSOPS-decrypted credential and authenticates to Valkey as ACL user `smoke`, then the shared Postgres instance is Healthy on a `local-path` PVC, the `smoke` database is owned by role `smoke` with the committed credential working, and the Valkey `smoke` user can write within `~smoke:*` but is denied outside it — proving the storage-class + per-app DB/role naming shared contract Features 5-8 each bind to.
 
 **Steps:**
-- [ ] Step 0: API surface area (file layout, `.sops.yaml` fix, `apps/storage.yaml` SSA seam)
-- [ ] Step 1: Wave `-10` — namespaces + the CNPG operator
+- [x] Step 0: API surface area (file layout, `.sops.yaml` fix, `apps/storage.yaml` SSA seam)
+- [x] Step 1: Wave `-10` — namespaces + the CNPG operator
 - [ ] Step 2: Wave `-5` — sealing and wiring the `smoke` KSOPS credentials
 - [ ] Step 3: Wave `0` — the shared `postgres` Cluster and the Valkey instance
 - [ ] Step 4: Wave `5` — the `smoke` `Database` CR

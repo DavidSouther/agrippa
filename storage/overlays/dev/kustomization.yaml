@@ -1,6 +1,10 @@
-# Empty-but-valid placeholder: apps/storage.yaml's Application syncs this path
-# and must reach zero-resource Synced/Healthy trivially until a later
-# feature-step (postgres, valkey) lands real content.
+# Storage layer: the CNPG operator, the shared postgres Cluster, the shared
+# Valkey instance, and the smoke fixture's sops-encrypted credentials.
+# Composed at four intra-storage sync-waves (-10 namespaces+operator, -5
+# credential Secrets, 0 shared operands, 5 per-consumer Database) -- see each
+# nested kustomization's own commonAnnotations for its wave.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-resources: []
+resources:
+  - namespace.yaml
+  - cnpg-operator/

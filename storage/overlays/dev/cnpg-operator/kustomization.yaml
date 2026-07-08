@@ -1,10 +1,19 @@
 # Wave -10: the CloudNativePG operator's CRDs, controller, and webhook. Must
-# be Ready before the wave-0 shared Cluster syncs. Chart pin lands Step 1
-# (research:public against https://cloudnative-pg.github.io/charts).
+# be Ready before the wave-0 shared Cluster syncs. Chart pinned to 0.29.0
+# (appVersion/operator 1.30.0), the latest release on
+# https://cloudnative-pg.github.io/charts as of this build
+# (research:public, github.com/cloudnative-pg/charts/releases/tag/cloudnative-pg-v0.29.0).
+# The chart bundles its own CRDs, controller, and webhook -- self-contained,
+# the same shape cert-manager's static manifest already has in core.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
   argocd.argoproj.io/sync-wave: "-10"
 resources:
   - namespace.yaml
-helmCharts: []   # cloudnative-pg chart lands Step 1
+helmCharts:
+  - name: cloudnative-pg
+    repo: https://cloudnative-pg.github.io/charts
+    version: 0.29.0
+    releaseName: cnpg
+    namespace: cnpg-system
