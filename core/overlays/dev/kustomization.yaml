@@ -12,3 +12,9 @@ resources:
   - istio-control/
   - metallb-config.yaml
   - cert-issuers.yaml
+  - istio-ingress-namespace.yaml
+  - gateway.yaml
+  - gateway-cert.yaml
+  - gateway-external-svc.yaml
+  - argocd-httproute.yaml
+  - argocd-destinationrule.yaml
