@@ -46,4 +46,12 @@ kustomize build apps/platform/argocd \
 kubectl --context "$CTX" -n argocd rollout status deployment/argocd-repo-server --timeout=300s
 
 echo "bootstrap: KSOPS-enabled ArgoCD installed in namespace argocd"
-# stage 4 (root app-of-apps apply) is not yet implemented.
+
+# --- Stage 4: root app-of-apps apply ---------------------------------------
+# One-shot, idempotent: applies apps/ once (root.yaml plus the five layer
+# Applications). From here ArgoCD reconciles -- root manages the apps/
+# directory it lives in, including itself, and each layer Application manages
+# its own <layer>/overlays/dev path (Step 3).
+kubectl --context "$CTX" apply -k apps
+
+echo "bootstrap: root app-of-apps applied"

@@ -1,0 +1,28 @@
+# Self-manages ArgoCD's own KSOPS-enabled install from the same source
+# `mise run bootstrap` applied by hand once (Step 2, apps/platform/argocd),
+# so ArgoCD reconciles its own upgrades/config drift going forward instead of
+# staying a one-shot manual install.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DavidSouther/agrippa.git
+    targetRevision: main
+    path: apps/platform/argocd
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    # Same rationale as bootstrap.sh's --server-side apply (Step 2): ArgoCD's
+    # own CRDs overflow the client-side last-applied-configuration annotation.
+    # (syncOptions nests under syncPolicy -- see apps/core.yaml's comment.)
+    syncOptions:
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true

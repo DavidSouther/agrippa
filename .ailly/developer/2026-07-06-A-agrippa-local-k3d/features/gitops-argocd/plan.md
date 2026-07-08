@@ -30,8 +30,8 @@
 **Steps:**
 - [x] Step 0: API surface area
 - [x] Step 1: Trust root — namespace, `sops-age` Secret, `.sops.yaml` dev recipient
-- [ ] Step 2: KSOPS-enabled ArgoCD install
-- [ ] Step 3: App-of-apps skeleton and root self-management (feature test green)
+- [x] Step 2: KSOPS-enabled ArgoCD install
+- [ ] Step 3: App-of-apps skeleton and root self-management (feature test green) — BLOCKED, see note below
 - [ ] Step 4: Idempotency, `test:feature` exclusion, and regression safety
 
 ## Step 0: API surface area
@@ -213,12 +213,48 @@ spec:
   project: default
   source: {repoURL: <origin-url>, targetRevision: main, path: core/overlays/dev}
   destination: {server: https://kubernetes.default.svc, namespace: argocd}
-  syncPolicy: {automated: {prune: true, selfHeal: true}}
-  syncOptions: ["ServerSideApply=true", "SkipDryRunOnMissingResource=true"]
+  # syncOptions nests under syncPolicy, not spec -- corrected at build time
+  # against the live v3.4.4 Application CRD schema (see Build-time correction
+  # below); this outline originally had it as a spec-level sibling of
+  # syncPolicy, which `kubectl apply` rejects under strict decoding.
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: ["ServerSideApply=true", "SkipDryRunOnMissingResource=true"]
 
 task bootstrap (stage 4 appended):
   kubectl apply -k apps
 ```
+
+**Build-time correction (this session):** `spec.syncOptions` (as written above and
+originally in `apps/core.yaml`/`platform/overlays/dev/argocd.yaml`) is rejected
+by `kubectl apply` with `strict decoding error: unknown field "spec.syncOptions"`
+against the real ArgoCD v3.4.4 Application CRD, confirmed by inspecting the
+CRD's `openAPIV3Schema` directly: `syncOptions` is one of
+`spec.syncPolicy`'s properties (alongside `automated`, `retry`,
+`managedNamespaceMetadata`), not a `spec`-level sibling of `syncPolicy`. Fixed
+in both files to nest `syncOptions` under `syncPolicy`; the outline above is
+corrected to match. Reversible, in scope (this step's own manifests), not
+underdetermined (the live CRD schema is authoritative).
+
+**Blocker found this session (unresolved, execution stopped here):** with the
+syncOptions fix applied, `mise run bootstrap` exits 0 and creates all six
+Applications, but `root` never reaches Synced — `kubectl -n argocd get
+application root -o jsonpath='{.status.conditions}'` reports
+`"failed to list refs: remote repository is empty"`. Verified independently:
+`git ls-remote https://github.com/DavidSouther/agrippa.git` and `gh api
+repos/DavidSouther/agrippa --jq .size` (returns `0`) both confirm the
+`origin` remote (`git@github.com:DavidSouther/aristotle.git`, redirects to the
+renamed `DavidSouther/agrippa`) has never been pushed to — no branches, no
+commits, despite this repo's local history. `tests/gitops.bats` fails at line
+101 (`wait_for_synced_healthy root`), one assertion further than before this
+step's work (previously line 93, the repo-server/KSOPS check Step 2 now
+satisfies). Populating the remote (`git push origin main`, or equivalent)
+would very likely clear this, but pushing local commit history to a public
+GitHub repository is exactly the kind of irreversible-feeling, human-owned
+action this project's own git-safety convention reserves for an explicit
+user request — not a call to make unilaterally mid-build. Stopped here rather
+than pushing or faking a green result; see the session's final report to the
+user for the concrete ask.
 
 ## Step 4: Idempotency, `test:feature` exclusion, and regression safety
 
