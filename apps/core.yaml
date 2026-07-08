@@ -6,6 +6,23 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "0"
+    # `syncOptions: ServerSideApply=true` (below) silently auto-enables
+    # ArgoCD's deprecated "Structured Merge Diff" strategy (v3.4.4
+    # controller/state.go: `if ... HasOption("ServerSideApply=true") {
+    # diffConfigBuilder.WithStructuredMergeDiff(true) }`, application-wide,
+    # no per-resource override). SMD predicts the live state via a LOCAL
+    # simulation rather than a real API-server dry-run, and mispredicts
+    # CRD-defaulted/controller-owned fields -- exactly the Gateway/HTTPRoute
+    # symptom this feature-step hit live (permanently OutOfSync even though
+    # `spec` matched byte-for-byte; three different `ignoreDifferences` forms
+    # -- jsonPointers, jqPathExpressions, managedFieldsManagers -- all failed
+    # to clear it, because the real problem was the diff algorithm's
+    # prediction, not un-ignored content). This is a known, still-open
+    # upstream limitation (argoproj/argo-cd#22151, matching this exact
+    # Gateway API scenario). Fix: force the stable "Server-Side Diff"
+    # strategy instead, which performs a real dry-run apply against the API
+    # server so admission/defaulting participates correctly.
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: default
   source:
@@ -52,34 +69,3 @@ spec:
       jqPathExpressions:
         - .webhooks[].clientConfig.caBundle
         - .webhooks[].failurePolicy
-    # Gateway API's Gateway/HTTPRoute both carry a registered `status`
-    # subresource that istiod's Gateway API controller populates
-    # (Programmed/Accepted conditions, addresses, attachedRoutes) -- none of
-    # which the git-sourced manifest (spec-only, no status:) ever sets, so
-    # every reconcile left `core` permanently OutOfSync once the Gateway
-    # (Step 4) landed. Both `jsonPointers: [/status]` and
-    # `jqPathExpressions: [.status]` were tried first and, live-verified this
-    # session, left both resources still OutOfSync against the live
-    # ServerSideApply-managed objects (confirmed via `argocd app get --core`,
-    # which kept reporting these two OutOfSync after each self-heal sync
-    # attempt, even though a field-by-field spec comparison matched exactly).
-    # `managedFieldsManagers` is the mechanism actually built for this case --
-    # ignore whatever field manager(s) other than argocd-controller own on
-    # this resource -- and is confirmed via `--show-managed-fields` to be
-    # the correct owner set: istio.io/gateway-controller and pilot-discovery
-    # both write the `status` subresource on Gateway; pilot-discovery alone
-    # writes it on HTTPRoute. The feature test itself still reads live
-    # `.status` directly via `kubectl get`, which this does not affect.
-    - group: gateway.networking.k8s.io
-      kind: Gateway
-      namespace: istio-ingress
-      name: agrippa-gateway
-      managedFieldsManagers:
-        - istio.io/gateway-controller
-        - pilot-discovery
-    - group: gateway.networking.k8s.io
-      kind: HTTPRoute
-      namespace: argocd
-      name: argocd
-      managedFieldsManagers:
-        - pilot-discovery
