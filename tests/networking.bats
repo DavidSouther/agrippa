@@ -101,12 +101,17 @@ wait_for_core_synced_healthy() {
   [[ "$output" =~ ^(2[0-9][0-9]|3[0-9][0-9])$ ]]
 
   # THEN 2: TLS is terminated at the Gateway with a certificate ISSUED BY THE
-  # LOCAL CA. `curl -kv` prints the peer certificate's issuer to stderr; asserting
-  # the local CA's CommonName proves cert-manager's SelfSigned->CA chain issued the
-  # Gateway cert (the TLS half of the shared contract), rather than Istio serving
-  # its built-in self-signed default. This is the assertion that makes the test
-  # about the CONTRACT, not merely about reachability.
-  run curl -kv -sS -o /dev/null --max-time 10 "https://${GW_HOST}/"
+  # LOCAL CA. Uses `openssl s_client | openssl x509 -noout -issuer` rather
+  # than `curl -kv | grep`, per design.md's cleared Q6 resolution: the
+  # operator's system `curl` links LibreSSL, not OpenSSL, making `curl -v`'s
+  # human-readable cert dump a brittle, backend-dependent interface for this
+  # exact assertion (live-confirmed this session). `curl -k` (THEN 1 above)
+  # stays the reachability check; asserting the local CA's CommonName here
+  # proves cert-manager's SelfSigned->CA chain issued the Gateway cert (the
+  # TLS half of the shared contract), rather than Istio serving its built-in
+  # self-signed default. This is the assertion that makes the test about the
+  # CONTRACT, not merely about reachability.
+  run bash -c "openssl s_client -connect 127.0.0.1:443 -servername '${GW_HOST}' </dev/null 2>/dev/null | openssl x509 -noout -issuer"
   [ "$status" -eq 0 ]
-  echo "$output" | grep -Eqi "issuer:.*${CA_CN}"
+  [[ "$output" == *"${CA_CN}"* ]]
 }
