@@ -191,3 +191,39 @@ From the feature-step `2026-07-06-A-agrippa-local-k3d/features/gitops-argocd/des
   the manual `bootstrap` step if a chicken-and-egg surfaces (metallb needed before ArgoCD can pull
   an image on a LoadBalancer IP), with no rework elsewhere. Local k3d's node port-map makes this
   unlikely, since image pulls use the node's own network, not a LoadBalancer IP.
+
+## Feature-step deferred decisions: Networking (Istio + cert-manager)
+
+From the feature-step `2026-07-06-A-agrippa-local-k3d/features/networking-istio/design.md`:
+
++ **cloudflared and ExternalDNS, `overlays/prod`, and public ACME TLS.** Deferred to the cloud
+  cycle. The local CA, `*.nip.io` hostnames, and the `externalIPs` reachability fix are the local
+  stand-ins, with seams preserved in the repo for the cloud-cycle implementation.
+
++ **Per-workload HTTPRoutes and Certificates.** Feature 9 (Workloads) consumes the shared
+  Gateway/HTTPRoute/hostname/TLS contract defined here. Auth and Observability consume it for
+  their own UIs. None of these per-workload routes or certs are built in this step.
+
++ **Importing the local CA into the host trust store.** An opt-in operator action; the feature
+  test and local development use `curl -k` to accept the deliberately-untrusted local CA.
+
++ **HTTP→HTTPS redirect HTTPRoute.** The `:80` listener is provisioned on the shared Gateway;
+  the redirect route itself is a convention later steps may add. The local `curl -k` path uses
+  `:443` directly.
+
++ **GitOps-native machine-independent IP derivation.** The committed `externalIPs: 172.18.0.3`
+  and metallb pool `172.18.255.200-172.18.255.250` are documented defaults for the current
+  long-lived `agrippa-dev` cluster, with a manual `docker inspect` / `docker network inspect`
+  re-derivation note. A second operator or a `cluster:down`/`up` cycle on the same machine can
+  draw a different Docker subnet and break the request path. Moving IP derivation into the build
+  (a `mise` task or kustomize component that patches values from `docker` commands at apply time)
+  would eliminate this reproducibility gap; parked here pending a cross-cutting bootstrap/build-phase
+  decision.
+
++ **Per-feature Certificates and per-host blast radius.** The design uses one shared
+  `agrippa-gateway-tls` Certificate with explicit SANs that every feature appends to. The
+  alternative — per-feature `Certificate` objects each contributing its own Secret to separate
+  Gateway listener `certificateRefs` — can avoid merge contention if parallel Features 5–8
+  contend on the shared file. Kept as designed with a watch-item: if real contention surfaces,
+  the first contending feature can split this to per-host certs via a mechanical refactor with
+  the Gateway listener accepting multiple `certificateRefs` by SNI.
