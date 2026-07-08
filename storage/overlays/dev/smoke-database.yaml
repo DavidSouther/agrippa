@@ -1,0 +1,10 @@
+# Wave 5: the permanent `smoke` fixture's Database CR -- a declarative
+# per-app-database proof standing in for future Feature 5-8 consumers.
+# Name-only stub -- spec (owner, cluster) lands Step 4.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: smoke
+  namespace: storage
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"

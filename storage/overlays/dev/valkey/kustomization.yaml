@@ -1,0 +1,7 @@
+# Wave 0: the shared standalone Valkey instance. Chart pin and values land
+# Step 3 (research:public against the official valkey-io/valkey-helm chart).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "0"
+helmCharts: []   # valkey chart lands Step 3

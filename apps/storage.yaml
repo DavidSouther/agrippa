@@ -19,3 +19,11 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    # CNPG's Cluster CRD is large enough to overflow client-side apply's
+    # last-applied-configuration annotation, and SkipDryRunOnMissingResource
+    # lets the wave-0 Cluster / wave-5 Database CRs sync before their own
+    # CRDs are dry-run-validatable on the very first apply -- same seam as
+    # apps/core.yaml's syncOptions.
+    syncOptions:
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true

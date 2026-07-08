@@ -1,0 +1,9 @@
+# Wave 0: the single shared Postgres Cluster `postgres`. Name-only stub --
+# spec (instances, storage class/size, managed.roles) lands Step 3.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres
+  namespace: storage
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
