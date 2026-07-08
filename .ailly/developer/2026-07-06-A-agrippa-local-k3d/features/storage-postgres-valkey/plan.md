@@ -33,7 +33,7 @@
 **Steps:**
 - [x] Step 0: API surface area (file layout, `.sops.yaml` fix, `apps/storage.yaml` SSA seam)
 - [x] Step 1: Wave `-10` — namespaces + the CNPG operator
-- [ ] Step 2: Wave `-5` — sealing and wiring the `smoke` KSOPS credentials — **BLOCKED**: credentials sealed and committed, but the generator is temporarily reverted to inert (`generators: []`) because enabling it live-errors `storage` into `ComparisonError`. Root cause: the ArgoCD repo-server's existing KSOPS install (`apps/platform/argocd/kustomization.yaml`, from the already-completed `gitops-argocd` feature-step) never mounts the `ksops` binary at kustomize's own exec-plugin path, only at `/usr/local/bin/ksops` — a real, still-open upstream gap (viaduct-ai/kustomize-sops#283/#207/#164). The fix touches the shared ArgoCD repo-server Deployment, outside this feature-step's own scope — see the *Blocked at Step 2* section below for the drafted fix.
+- [x] Step 2: Wave `-5` — sealing and wiring the `smoke` KSOPS credentials — unblocked and GREEN (see *Blocked at Step 2 — resolved* section below).
 - [ ] Step 3: Wave `0` — the shared `postgres` Cluster and the Valkey instance
 - [ ] Step 4: Wave `5` — the `smoke` `Database` CR
 - [ ] Step 5: Full GREEN — the credential + ACL proof, and the regression sweep
@@ -610,7 +610,29 @@ decisions this gate must resolve. No irreversible, out-of-recorded-scope, or
 underdetermined item remains for this artifact. The `*Draft*` marker is removed
 (changed to `*Reviewed 2026-07-08*`).
 
-## Blocked at Step 2 (2026-07-08, Build phase)
+## Blocked at Step 2 — resolved (2026-07-08, Build phase)
+
+The coordinator applied the drafted fix below (commit `cd1a563`, out of this
+feature-step's own scope, applied and live-verified separately) to
+`apps/platform/argocd/kustomization.yaml`: the `custom-tools` `ksops` binary
+is now additionally mounted at kustomize's own exec-plugin path
+(`/.config/kustomize/plugin/viaduct.ai/v1/ksops/ksops`), alongside the
+pre-existing `/usr/local/bin/ksops` mount. Live-verified before resuming:
+the `argocd` Application is Synced/Healthy, and the `argocd-repo-server`
+rolled a fresh pod with `ksops` present at that exact path.
+
+With the root cause fixed, `secrets/dev/storage/kustomization.yaml` was
+re-enabled (`generators: [secret-generator.yaml]`, commit `a86903f`) and
+pushed. Live-verified after a hard refresh: `storage` stayed
+`Synced Healthy` with an empty `.status.conditions` (no `ComparisonError`),
+`operationState.phase` was `Succeeded`, and both `smoke-db`
+(`kubernetes.io/basic-auth`, keys `username`/`password`) and
+`smoke-valkey` (`Opaque`, keys `default`/`smoke`) decrypted to real,
+correctly-shaped, non-empty data. `mise run test:static` still passes
+(conftest sees the `secrets/` ciphertext + `sops:` block and allows it).
+Step 2 is GREEN; the original blocker record below is kept for history.
+
+## Blocked at Step 2 (2026-07-08, Build phase) — historical record
 
 Steps 0 and 1 landed clean and are live-verified Synced/Healthy (commits
 `5ae825e`, `a7d88b2`). Step 2's credential-sealing half is done and committed
