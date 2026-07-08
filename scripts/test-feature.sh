@@ -56,14 +56,16 @@ fi
 # test, which drives `cluster:up`/`cluster:down` against the long-lived
 # agrippa-dev cluster, not this throwaway feature cluster; gitops.bats -> also
 # drives the long-lived agrippa-dev cluster via `mise run bootstrap`, needs its
-# own runner rather than this throwaway feature cluster; rotate-keys.bats ->
-# a standalone sops/age mechanism check with a stubbed Bitwarden, needs no
-# cluster at all).
+# own runner rather than this throwaway feature cluster; networking.bats ->
+# drives the GitOps-reconciled `core` layer (Istio Gateway/HTTPRoute/TLS)
+# against the long-lived agrippa-dev cluster via ArgoCD, not this throwaway
+# feature cluster; rotate-keys.bats -> a standalone sops/age mechanism check
+# with a stubbed Bitwarden, needs no cluster at all).
 probe_suites=()
 for f in tests/*.bats; do
   [ -e "$f" ] || continue
   case "$(basename "$f")" in
-    agrippa.bats|harness.bats|preflight.bats|cluster-core.bats|gitops.bats|rotate-keys.bats) continue ;;
+    agrippa.bats|harness.bats|preflight.bats|cluster-core.bats|gitops.bats|networking.bats|rotate-keys.bats) continue ;;
   esac
   probe_suites+=("$f")
 done
