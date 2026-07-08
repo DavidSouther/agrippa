@@ -243,3 +243,22 @@ From the feature-step `2026-07-06-A-agrippa-local-k3d/features/networking-istio/
   contend on the shared file. Kept as designed with a watch-item: if real contention surfaces,
   the first contending feature can split this to per-host certs via a mechanical refactor with
   the Gateway listener accepting multiple `certificateRefs` by SNI.
+
+## Feature-step deferred decisions: Storage (Postgres + Valkey)
+
+From the feature-step `2026-07-06-A-agrippa-local-k3d/features/storage-postgres-valkey/design.md`:
+
++ **The `DatabaseRole` CRD (CNPG 1.30, 2026-07) — forward-looking watch-item.** The CRD
+  promotes role management to its own namespaced CR, fixing `managed.roles`' RBAC-scoping flaw,
+  but its first cut supports only certificate-based auth — no `passwordSecret` field. Every
+  Feature 5-7 consumer (Auth/Keycloak, Git hosting/Forgejo, Feature flags/Flagsmith) needs a
+  plain username/password DSN, so this feature-step uses the stable `managed.roles +
+  Database` pair. Revisit when the `DatabaseRole` CRD gains password support.
+
++ **Credential sealing as a shared `mise seal-secret` helper — potential DRY extraction.** This
+  feature-step documents the security-sensitive sealing discipline (generate in memory, encrypt
+  immediately, never plaintext to disk, never in argv/shell history) inline in the plan's Steps
+  2. Features 5-8 (Auth, Git hosting, Feature flags, Observability) will repeat this pattern.
+  Extract to a shared reusable helper when Feature 5 actually repeats it and the correct
+  interface becomes evident; the conservative default per the project's YAGNI posture is inline
+  now, extract on the rule-of-three (when the second real caller proves the shape).
