@@ -79,6 +79,22 @@ into this platform's GitOps/Terraform management, not a fresh design.
   lands with item 1 tooling and `mise` init — before ArgoCD (item 4) exists to
   apply anything.
 
+- **`tests/rotate-keys.bats` fails, pre-existing, confirmed unrelated to the
+  Storage feature-step's own changes.** Reproduced in isolation (a fresh
+  `agrippa-age-citest` Bitwarden item, an isolated temp `secrets/citest/`
+  fixture — not the real `agrippa-age-dev` trust root or any committed
+  secret). `scripts/rotate-keys.sh` mints a new identity, then `sops
+  updatekeys` reports the fixture file "already up to date" (does not
+  actually re-encrypt it to the new identity), then `.sops.yaml`'s recipient
+  is updated to the new key anyway — leaving the fixture file encrypted to
+  neither the archived nor the new identity, so a subsequent `sops -d` fails
+  with "no identity matched any of the recipients." Needs its own
+  investigation into why `sops updatekeys` treats the freshly-created fixture
+  as already current (likely a stale `.sops.yaml` read, or the fixture not
+  being tracked as having a resolvable prior recipient at rotation time).
+  Does not block any live secret or the running cluster's `sops-age` trust
+  root — only the rotation *test path* itself is broken.
+
 ## Future targets
 
 - **Home lab (on-prem) as a third substrate.** Not in scope for the current
