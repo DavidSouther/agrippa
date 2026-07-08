@@ -1,0 +1,9 @@
+# Observability owns loki, grafana, tempo, mimir, alloy
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observability
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec: {}

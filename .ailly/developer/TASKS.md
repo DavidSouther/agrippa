@@ -127,3 +127,49 @@ into this platform's GitOps/Terraform management, not a fresh design.
   `.github/workflows/watch.yml` lands now as a scheduling/alerting placeholder
   (no live target to probe yet); wire in the real `bats tests/agrippa.bats`
   assertions once staging is live.
+
+## Feature-step deferred decisions: Step 0 (mise + testing harness)
+
+From the feature-step `2026-07-06-A-agrippa-local-k3d/features/step0-mise-testing-harness/design.md`:
+
+- **`terraform` / `tflint` pins and the `test:tf` lane.** Deferred to the cloud
+  cycle (research decision 6). These land when cloud work starts and require a
+  one-line `[tools]` addition and one umbrella-lane edit. Feature-step omits
+  them for the local build since there is no `terraform/` to operate on.
+
+- **`test:gestalt` CI wiring to a staging or live target.** The local
+  `test:gestalt` task runs `bats tests/agrippa.bats` against whatever `ENV` and
+  host overrides point to (defaulting to `ENV=dev` local k3d). The post-sync CI
+  lane that runs against deployed staging or production targets lands with the
+  staging cycle. `.github/workflows/watch.yml` remains a placeholder until
+  staging exists.
+
+- **Chainsaw assertion breadth and helm-unittest snapshot-test breadth.** The
+  `test:feature` k3d loop (create, apply component, run assertions, destroy) is
+  wired by Feature 0. The actual chainsaw `.yaml` resource-reconcile assertions
+  and helm-unittest snapshot suites are authored per-component in each
+  subsequent feature-step.
+
+- **Repoint or drop two dangling citations in `TASKS.md`.** (Research decision 7,
+  docs cleanup only.) The references to `TASK-NOTES-testing-harness.md` (line
+  112) and `prober-synthetic-monitoring.md` (line 126) name files that do not
+  exist. Either replace them with inline notes, or remove them and file a
+  separate docs cleanup task if the content is no longer needed.
+
+## Feature-step deferred decisions: Cluster Core (local k3d substrate)
+
+From the feature-step `2026-07-06-A-agrippa-local-k3d/features/cluster-core-k3d/design.md`:
+
++ **Production substrate.** cloud-init, Terraform, DigitalOcean node pools, the
+  `elastic-node-pool` autoscaling seam, and the scale-to-zero GPU pool. Deferred
+  to the cloud cycle; the single-node dev config is the local form and the overlay
+  seam is preserved.
+
++ **metallb + `IPAddressPool`.** Logically part of Cluster Core, but delivered by
+  the GitOps bootstrap at a sync-wave (research decision 8). Settled in the GitOps
+  feature-step; may move into the manual `bootstrap` task if a chicken-and-egg
+  surfaces, with no rework here.
+
++ **k3s version parity with production.** Local pins the k3d default image for
+  reproducibility; matching production's exact k3s version is a cloud-cycle
+  concern.

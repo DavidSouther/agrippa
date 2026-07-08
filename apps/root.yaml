@@ -1,0 +1,8 @@
+# Root app-of-apps Application. Name must stay "root" -- tests/gitops.bats
+# asserts wait_for_synced_healthy root.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec: {}

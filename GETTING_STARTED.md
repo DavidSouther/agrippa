@@ -6,20 +6,17 @@ and manifests as Production, running as k3s in Docker instead of on cloud VMs.
 
 ## Prerequisites
 
+Mise manages all tools, so it and docker are only ambient dependencies.
 Install via [Homebrew](https://brew.sh/):
 
 ```bash
-brew install docker k3d kubectl helm bats-core
+brew install docker mise
 ```
 
+- **Mise** — dev environment task runner, including build in tool installation
 - **Docker** — k3d creates k3s clusters as Docker containers, so a running Docker daemon is
   required. Docker Desktop is the common choice on macOS; Colima or OrbStack work too as long as
   `docker info` succeeds.
-- **k3d** — wraps k3s in Docker for local clusters that share the platform's Helm charts with
-  Production.
-- **kubectl** — talks to the cluster k3d creates.
-- **helm** — deploys the charts this platform is built from.
-- **bats-core** — runs this repo's `tests/*.bats` suites, including the preflight check below.
 
 ### Docker resource allocation
 

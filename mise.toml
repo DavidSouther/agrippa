@@ -1,0 +1,65 @@
+[env]
+# Dev convenience: an operator's `bw unlock --raw` session token (BW_SESSION).
+# Every `mise run` task picks this up automatically. Must be in quotes, as it
+# is a base64 string.
+_.file = ".env" # BW_SESSION="QWERTY123...=="
+
+[tools]
+kubeconform = "0.8.0"
+helm        = "4.2.2"
+kubectl     = "1.36.2"
+k3d         = "5.9.0"
+conftest    = "0.68.2"
+bats        = "1.13.0"
+"aqua:kyverno/chainsaw" = "0.2.15"
+sops        = "3.13.2"
+age         = "1.3.1"
+kustomize   = "5.8.1"
+jq          = "1.7.1"
+yq          = "4.53.3"
+bitwarden   = "2026.6.0"
+
+[tasks.setup]
+description = "Install the helm-unittest plugin and trust this repo's mise config"
+file = "scripts/setup.sh"
+
+[tasks."cluster:up"]
+description = "Create (or ensure) the local agrippa-dev k3d cluster from k3d/agrippa-dev.yaml"
+file = "scripts/cluster-up.sh"
+
+[tasks."cluster:down"]
+description = "Delete the local agrippa-dev k3d cluster"
+run = "k3d cluster delete agrippa-dev"
+
+[tasks."bootstrap"]
+description = "Create the sops-age trust root, install a KSOPS-enabled ArgoCD, apply the root app-of-apps once"
+file = "scripts/bootstrap.sh"
+
+[tasks."rotate-keys"]
+description = "Rotate an environment's age keypair: store a fresh identity in Bitwarden, archive (not delete) the old one, update .sops.yaml, and re-encrypt any already-committed secrets under the new key (never touches disk)"
+file = "scripts/rotate-keys.sh"
+
+[tasks."test:static"]
+description = "kubeconform schema-validation + plaintext-Secret conftest guard over committed manifests"
+file = "scripts/test-static.sh"
+
+[tasks."test:policy"]
+description = "conftest verify over tests/policy/*_test.rego self-tests"
+run = "conftest verify --policy tests/policy tests/policy"
+
+[tasks."test:chart"]
+description = "helm-unittest over charts/*/tests"
+file = "scripts/test-chart.sh"
+
+[tasks."test:feature"]
+description = "k3d up, apply component, chainsaw + bats probes, k3d down"
+file = "scripts/test-feature.sh"
+
+[tasks."test:gestalt"]
+description = "bats tests/agrippa.bats honoring ENV and *_HOST overrides"
+run = "bats tests/agrippa.bats"
+
+[tasks."test:push"]
+description = "Per-push lane: test:static, test:policy, test:chart"
+depends = ["test:static", "test:policy", "test:chart"]
+run = "true"
