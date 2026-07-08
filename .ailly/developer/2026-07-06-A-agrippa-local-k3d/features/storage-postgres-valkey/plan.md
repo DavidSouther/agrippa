@@ -36,7 +36,7 @@
 - [x] Step 2: Wave `-5` — sealing and wiring the `smoke` KSOPS credentials — unblocked and GREEN (see *Blocked at Step 2 — resolved* section below).
 - [x] Step 3: Wave `0` — the shared `postgres` Cluster and the Valkey instance — GREEN, with two build-time-discovered fixes beyond the paper plan: `apps/storage.yaml` needed `compare-options: ServerSideDiff=true` (CNPG's mutating webhook defaults many Cluster fields, mirroring `apps/core.yaml`'s Gateway/HTTPRoute precedent exactly, as the plan's own edge case anticipated); and the Valkey `helmCharts:` sub-kustomization needed a `patches:` workaround for a real kustomize 5.8.0+ regression (kustomize#6058) that stopped stamping `metadata.namespace` onto helm-chart-generated resources. See the *Step 3 build-time findings* note after the Step 3 section below.
 - [x] Step 4: Wave `5` — the `smoke` `Database` CR — GREEN. Build-time correction: the live CRD requires `spec.name` (the actual PostgreSQL database name) in addition to `spec.owner`/`spec.cluster.name` — the paper plan's Implementation Outline omitted it. Also hit an ArgoCD operational quirk, not a manifest bug: after pushing the `spec.name` fix, `storage` stayed stuck retrying the CRD-validation error from *before* the fix landed — the running `Sync` operation had snapshotted its manifest set at operation start and kept re-applying that stale snapshot across retries rather than re-fetching per attempt. Clearing the stuck operation (`kubectl -n argocd patch application storage --type merge -p '{"operation":null}'`) then re-refreshing picked up the fix immediately. `status.applied == true`, live-verified.
-- [ ] Step 5: Full GREEN — the credential + ACL proof, and the regression sweep
+- [x] Step 5: Full GREEN — the credential + ACL proof, and the regression sweep — `tests/storage.bats` GREEN (twice, back-to-back, idempotent). Full regression: `mise run test:push`, `mise run test:feature`, `tests/harness.bats`, `tests/cluster-core.bats`, `tests/gitops.bats`, `tests/networking.bats` all GREEN. `tests/rotate-keys.bats` fails, but confirmed pre-existing and unrelated (reproduces identically at commit `cd1a563`, this feature-step's own starting point, in an isolated worktree, before any Step 2-5 change landed) — see the note after the Step 5 section below.
 
 **Libraries & Skills (carried forward from `design.md`/`research.md`; load before each build step):**
 
@@ -518,6 +518,45 @@ run bats tests/storage.bats
 run mise run test:push && mise run test:feature
 run bats tests/cluster-core.bats tests/gitops.bats tests/networking.bats tests/rotate-keys.bats
 ```
+
+### Step 5 results (2026-07-08)
+
+`tests/storage.bats` GREEN on the first real run against the fully
+reconciled `storage` layer, and GREEN again on an immediate back-to-back
+re-run (the idempotency edge case above) -- no test-selector corrections
+were needed; every label/CLI assumption (`cnpg.io/cluster`,
+`cnpg.io/instanceRole=primary`, `app.kubernetes.io/name=valkey`, the
+`healthy` phase substring, the `NOPERM` denial string) matched the
+pinned CNPG 1.30.0 / Valkey chart 0.10.0 versions build-verified in
+Steps 3-4.
+
+Regression sweep: `mise run test:push` (green), `mise run test:feature`
+(green, throwaway `agrippa-feature` cluster), `bats tests/harness.bats`
+(green), `bats tests/cluster-core.bats` (green), `bats tests/gitops.bats`
+(green -- this is the KSOPS-repo-server fix's own dedicated regression
+coverage, confirming `cd1a563` didn't regress bootstrap), `bats
+tests/networking.bats` (green).
+
+`bats tests/rotate-keys.bats` **fails**, but this is pre-existing and
+unrelated to this feature-step, not a regression it introduced: this
+feature-step never touched `scripts/rotate-keys.sh`, `tests/rotate-keys.bats`,
+or their behavior, and the test itself runs entirely inside its own
+`$BATS_TEST_TMPDIR` against a synthetic `.sops.yaml`/secret, isolated from
+this repo's real `.sops.yaml`/`secrets/dev/storage/`. Confirmed by
+reproducing the identical failure in a clean `git worktree` checked out at
+commit `cd1a563` -- this feature-step's own Build-phase starting point,
+before any Step 2-5 change landed. Symptom: `rotate-keys.sh`'s `sops
+updatekeys` call logs "already up to date" and skips re-encrypting, so the
+post-rotation decrypt-under-the-new-key assertion fails with "no identity
+matched any of the recipients" -- looks like a `sops` version-behavior
+drift in `updatekeys`' change-detection, not anything this feature-step's
+own commits caused. Left unfixed and unreported-as-done: out of
+storage-postgres-valkey's scope (it owns Storage content, not the
+Secrets-management `rotate-keys` mechanism from a different, already-shipped
+feature-step), and fixing a security-critical key-rotation script's
+apparent behavior drift is exactly the kind of decision this session's own
+escalation criteria (out of recorded scope) says to report rather than
+patch autonomously.
 
 ## Resolved by the long-loop reviewer (2026-07-08)
 
