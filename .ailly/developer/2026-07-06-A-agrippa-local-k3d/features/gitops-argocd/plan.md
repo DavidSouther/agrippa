@@ -31,8 +31,8 @@
 - [x] Step 0: API surface area
 - [x] Step 1: Trust root — namespace, `sops-age` Secret, `.sops.yaml` dev recipient
 - [x] Step 2: KSOPS-enabled ArgoCD install
-- [ ] Step 3: App-of-apps skeleton and root self-management (feature test green) — BLOCKED, see note below
-- [ ] Step 4: Idempotency, `test:feature` exclusion, and regression safety
+- [x] Step 3: App-of-apps skeleton and root self-management (feature test green) — unblocked, see note below
+- [x] Step 4: Idempotency, `test:feature` exclusion, and regression safety
 
 ## Step 0: API surface area
 
@@ -236,25 +236,26 @@ in both files to nest `syncOptions` under `syncPolicy`; the outline above is
 corrected to match. Reversible, in scope (this step's own manifests), not
 underdetermined (the live CRD schema is authoritative).
 
-**Blocker found this session (unresolved, execution stopped here):** with the
-syncOptions fix applied, `mise run bootstrap` exits 0 and creates all six
-Applications, but `root` never reaches Synced — `kubectl -n argocd get
-application root -o jsonpath='{.status.conditions}'` reports
-`"failed to list refs: remote repository is empty"`. Verified independently:
-`git ls-remote https://github.com/DavidSouther/agrippa.git` and `gh api
-repos/DavidSouther/agrippa --jq .size` (returns `0`) both confirm the
-`origin` remote (`git@github.com:DavidSouther/aristotle.git`, redirects to the
-renamed `DavidSouther/agrippa`) has never been pushed to — no branches, no
-commits, despite this repo's local history. `tests/gitops.bats` fails at line
-101 (`wait_for_synced_healthy root`), one assertion further than before this
-step's work (previously line 93, the repo-server/KSOPS check Step 2 now
-satisfies). Populating the remote (`git push origin main`, or equivalent)
-would very likely clear this, but pushing local commit history to a public
-GitHub repository is exactly the kind of irreversible-feeling, human-owned
-action this project's own git-safety convention reserves for an explicit
-user request — not a call to make unilaterally mid-build. Stopped here rather
-than pushing or faking a green result; see the session's final report to the
-user for the concrete ask.
+**Blocker found this session, resolved by the user.** With the syncOptions fix
+applied, `mise run bootstrap` exited 0 and created all six Applications, but
+`root` never reached Synced — `kubectl -n argocd get application root
+-o jsonpath='{.status.conditions}'` reported `"failed to list refs: remote
+repository is empty"`. Verified independently: `git ls-remote
+https://github.com/DavidSouther/agrippa.git` and `gh api
+repos/DavidSouther/agrippa --jq .size` (returned `0`) both confirmed the
+`origin` remote (`git@github.com:DavidSouther/aristotle.git`, an outdated
+working name) had never been pushed to. Build execution stopped rather than
+pushing local history to a public GitHub repository unilaterally (a
+human-owned, git-safety-gated action) or faking a green result. The
+coordinator asked the user directly; the user confirmed Aristotle was an
+outdated prior working name, `DavidSouther/agrippa` is the real (public,
+empty) repo, and authorized repointing `origin` and pushing. `origin` was
+updated from `git@github.com:DavidSouther/aristotle.git` to
+`git@github.com:DavidSouther/agrippa.git` and `git push -u origin main`
+landed the 4 local commits. After a `argocd.argoproj.io/refresh=hard` on each
+Application, all seven (`root` + the five layers + the self-managed `argocd`
+app) reached `Synced`/`Healthy`, and `tests/gitops.bats` now passes end to
+end.
 
 ## Step 4: Idempotency, `test:feature` exclusion, and regression safety
 
