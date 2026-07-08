@@ -6,4 +6,27 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "0"
-spec: {}
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DavidSouther/agrippa.git
+    targetRevision: main
+    path: core/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    # Forward seam: core will carry cert-manager/Gateway API/Istio CRDs in a
+    # later feature-step, which need server-side apply the same way ArgoCD's
+    # own install does (Step 2) to avoid the client-side annotation-size
+    # limit, and SkipDryRunOnMissingResource for CRD/CR ordering across syncs.
+    # (syncOptions nests under syncPolicy per the Application CRD schema --
+    # plan.md's Implementation Outline had this as a spec-level sibling of
+    # syncPolicy, which `kubectl apply` rejects as an unknown field under
+    # strict decoding; corrected here against the live v3.4.4 CRD schema.)
+    syncOptions:
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true

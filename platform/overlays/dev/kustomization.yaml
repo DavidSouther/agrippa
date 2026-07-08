@@ -1,0 +1,9 @@
+# platform layer's dev overlay. Not empty like the other four layers -- it
+# carries the thin argocd self-management Application (Step 3's design), so
+# ArgoCD's own install reconciles from here going forward. Real platform
+# content (keycloak, forgejo, flagsmith) lands as later feature-steps' added
+# resources here.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - argocd.yaml

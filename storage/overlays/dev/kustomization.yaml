@@ -1,0 +1,6 @@
+# Empty-but-valid placeholder: apps/storage.yaml's Application syncs this path
+# and must reach zero-resource Synced/Healthy trivially until a later
+# feature-step (postgres, valkey) lands real content.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: []
