@@ -17,19 +17,17 @@ fi
 
 rc=0
 
-# Apply the component under test. Convention: apps/ is the GitOps tree a
-# component step commits its manifests into (kustomize if present, else plain
-# manifests). Empty/missing apps/ is a no-op, not an error, so this stays
-# green-on-empty until a component ships.
-if [ -f apps/kustomization.yaml ]; then
-  kubectl apply -k apps || rc=1
-elif [ -d apps ]; then
-  manifests=()
-  while IFS= read -r -d '' f; do manifests+=("$f"); done \
-    < <(find apps -type f \( -name '*.yaml' -o -name '*.yml' \) -print0)
-  if [ -n "${manifests[*]:-}" ]; then
-    kubectl apply -f "${manifests[@]}" || rc=1
-  fi
+# apps/ is the GitOps app-of-apps tree (GitOps feature-step onward): six
+# ArgoCD Application CRs, each pointing at its own <layer>/overlays/dev path.
+# This throwaway cluster never installs ArgoCD's CRDs -- only `bootstrap`
+# does that, against the long-lived agrippa-dev cluster (tests/gitops.bats
+# covers apps/ end-to-end there) -- so a bare `kubectl apply -k apps` here
+# would just fail with "no matches for kind Application". Skip it; a later
+# feature-step's real component manifests land under its own
+# <layer>/overlays/dev path instead, which is a plain kustomize/manifest
+# directory this loop can apply once that convention has real content.
+if [ -d apps ]; then
+  echo "test:feature: apps/ is GitOps-owned (ArgoCD Applications); covered by tests/gitops.bats against the long-lived cluster, skipping here"
 fi
 
 # chainsaw resource-reconcile assertions. Convention (DEVELOPMENT.md repo
