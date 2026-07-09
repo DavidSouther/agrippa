@@ -1,4 +1,13 @@
-# Step 0 skeleton (name-only stub, no spec); real content lands Step 3.
+# Wave 0: trips.davidsouther.com, David's real trips site (github.com/
+# davidsouther/trips, private, built by scripts/workloads-build.sh into the
+# trips:dev image and `k3d image import`-ed into the node's containerd --
+# imagePullPolicy: Never means this Deployment can only ever schedule
+# against an image already present there; `mise run workloads:build` must be
+# (re-)run against this exact cluster before this syncs, or the pod sits in
+# ErrImageNeverPull. No /healthz here (parent design decision 4) -- probes
+# target plain /. Modest explicit resources -- a static nginx pod is cheap,
+# and the cluster's cumulative resource pressure makes conservative requests
+# the right default.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,3 +15,33 @@ metadata:
   namespace: trips
   annotations:
     argocd.argoproj.io/sync-wave: "0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trips
+  template:
+    metadata:
+      labels:
+        app: trips
+    spec:
+      containers:
+        - name: trips
+          image: trips:dev
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80

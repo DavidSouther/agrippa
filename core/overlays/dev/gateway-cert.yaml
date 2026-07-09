@@ -15,6 +15,7 @@ spec:
     - git.davidsouther.com.127.0.0.1.nip.io
     - flagsmith.127.0.0.1.nip.io
     - davidsouther.com.127.0.0.1.nip.io
+    - trips.davidsouther.com.127.0.0.1.nip.io
   issuerRef:
     name: agrippa-ca
     kind: ClusterIssuer
