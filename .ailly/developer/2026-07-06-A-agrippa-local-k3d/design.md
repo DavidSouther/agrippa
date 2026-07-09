@@ -6,12 +6,17 @@
 a single-feature design. Its exit criterion is a Closing Bell usability study, not
 one executable feature test.
 
-**Phase: Review.** The project design doc moves through Review → Implement →
-Completed (project-cycle.md). This document, its feature-step plan, and the Closing
-Bell are in the Review (draft-gate) period now. A separately dispatched long-loop
-reviewer has cleared this design's draft; its open items are resolved in the
-*Resolved by the long-loop reviewer* block under Summary. The feature-step plan and
-the Closing Bell remain their own artifacts with their own gates.
+**Phase: Implement.** The project design doc moves through Review → Implement →
+Completed (project-cycle.md). Review closed when this document's and the
+feature-step plan's draft gates both cleared (see each artifact's own *Resolved by
+the long-loop reviewer* block). All ten feature-steps (0-9) have since been built
+through their own design→plan→build→cleanup cycles and are live, tested, and
+Synced/Healthy (updated 2026-07-09). **Completed** is reserved for after the
+Closing Bell study actually runs and passes — a human usability study this
+document's own long-loop reviewers do not run or pass on the operator's behalf
+(`closing-bell.md`; `developer/skills/ailly/references/shapes/long-loop.md` §6).
+The project stops here, at the human merge/Closing-Bell gate, until the operator
+runs it.
 
 **Closing Bell:** `ailly/developer/2026-07-06-A-agrippa-local-k3d/closing-bell.md`
 (the project's definition of done, in place of a feature test).
