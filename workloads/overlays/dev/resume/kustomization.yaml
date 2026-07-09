@@ -1,7 +1,9 @@
-# The `resume` component of the `workloads` layer. Step 0: only the
-# Namespace lands; deployment.yaml/service.yaml/httproute.yaml are named-only
-# stubs Step 2 fills in and appends here.
+# The `resume` component of the `workloads` layer: davidsouther.com, served
+# from the resume:dev image (scripts/workloads-build.sh).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - namespace.yaml
+  - deployment.yaml
+  - service.yaml
+  - httproute.yaml
