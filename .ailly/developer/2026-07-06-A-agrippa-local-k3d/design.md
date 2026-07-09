@@ -256,8 +256,17 @@ copy. From that source:
    (`davidsouther.com.<loopback>.nip.io` and `trips.davidsouther.com.<loopback>.nip.io`
    or equivalent per the Networking contract), and a cert-manager `Certificate` from
    the local CA issuer.
-3. **An ArgoCD Application** in the `workloads` layer pointing at that chart, so the
-   sites are GitOps-managed like everything else.
+3. **GitOps management via the existing `workloads` layer Application.** So the
+   sites reconcile like everything else. (Corrected 2026-07-09, per the
+   Workloads feature-step's own cleared research: `charts/resume/`/`charts/trips/`
+   stay real, helm-unittest-tested charts for the deferred prod/registry path, but
+   the live `workloads/overlays/dev/` content the shared `apps/workloads.yaml`
+   Application reconciles is plain kustomize `resources:` YAML, not a
+   chart-pointed Application — kustomize's local-`helmCharts:` load-restrictor
+   collides with the `charts/<chart>/` convention across the deep `overlays/dev`
+   tree, and a one-off cluster-wide load-restrictor relaxation is out of this
+   step's scope. Reversible, in scope, determined by a live `kustomize build`
+   test — not a re-litigation of the chart-authoring decision itself.)
 4. **A `/healthz` liveness endpoint for the personal site.** The committed gestalt
    probes `davidsouther.com/healthz`, but a jiffies static export serves 404 there
    by default. Resolve in the serving layer: either an nginx `location /healthz {
