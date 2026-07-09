@@ -346,3 +346,29 @@ From the feature-step `2026-07-06-A-agrippa-local-k3d/features/feature-flags-fla
 + **The project's own release-flag mechanism wiring to this Flagsmith instance (deferred future work).** The project `design.md` § Release Flag anticipates using this Flagsmith instance as the backing store for environment-gated platform rollouts; wiring that coupling (externalizing the `agrippa-dev` / `agrippa-prod` flags to read from Flagsmith rather than a hardcoded YAML field) is explicitly out of scope for this feature-step and left for a later cycle once both the platform's release posture and Flagsmith's own operational SLOs are proven.
 
 + **Redis/Valkey cache and `sse` real-time component (deferred as additive, optional, measured later if needed).** The chart ships both as opt-in toggles; empirically, a single-replica API plus single frontend replica on the shared CNPG `postgres` suffices for local dev, and polling fallback (no SSE) meets the feature test's reach. A future optimization cycle (measured against a real Workload's flag-evaluation latency SLOs, once Feature 9 lands) can revisit Redis wiring and SSE enablement; neither changes any manifests committed here.
+
+## Feature-step deferred decisions: Observability (LGTM + Alloy)
+
+From the feature-step `2026-07-06-A-agrippa-local-k3d/features/observability-lgtm/design.md` and `plan.md`:
+
++ **Mimir's rollout-operator and zone-awareness.** Disabled for the single-node dev cluster to conserve resources and pod count. When Observability scales to multi-node production HA, restore the rollout-operator defaults and enable zone-aware placement policies via Mimir's distributed chart values.
+
++ **Mimir's resource-heavy defaults (memory limits, ingester replication factor, query-frontend defaults).** Scoped down at reduced replica count for dev. Production scale requires re-tuning these defaults back to their full distributed-mode values per the `mimir-distributed` chart's own production documentation.
+
++ **Loki's chunks/results memcached caches and Mimir's Kafka-backed ingest-storage mode.** Disabled for the dev cluster to fit single-node constraints. Production scale defers these optimization layers to the cloud cycle.
+
++ **Alloy's ztunnel/Istio-mesh telemetry integration (`/stats/prometheus` scraping on port 15020).** Explicitly declined for this feature-step — available and low-effort, but required by neither the Specification nor Closing Bell task 4. A named, reversible follow-on seam: Alloy would target it via `discovery.kubernetes` pod-role, no new CRDs needed. Defer to a production-readiness or observability-enrichment cycle.
+
++ **Grafana's external Postgres backend.** Rejected at single-replica scale: SQLite is the chart default and sufficient; the only trigger for Postgres is scaling Grafana beyond one replica. The Storage step's per-app Postgres consumption contract stays available as a seam when Grafana scales.
+
++ **Grafana admin credential sealing via `admin.existingSecret`.** Rejected for dev: the dev credential (`admin`/`admin`) is a committed, intentionally-non-secret contract Closing Bell depends on. A future production overlay would use `admin.existingSecret` against a sops-sealed random password, reusing the Storage step's in-memory sealing discipline — a preserved, unbuilt seam.
+
++ **Prometheus Operator / `kube-prometheus-stack`.** Rejected: Alloy's `discovery.kubernetes` self-discovers directly against the Kubernetes API with no CRD dependency; installing the operator solely for ServiceMonitor CRDs is unbudgeted cluster scope that contradicts the reduced-replicas Specification. Revisit if production workloads require Prometheus Operator-native instrumentation patterns.
+
++ **Grafana backend-TLS DestinationRule.** Rejected: Grafana serves plain HTTP by default (unlike ArgoCD's internal HTTPS), so no backend-TLS re-origination is needed. Add a DestinationRule only if a future TLS-internal override is chosen.
+
++ **Production overlay with sops-sealed admin credential and external Postgres.** Preserved as an unbuilt seam: create `observability/overlays/prod/` with `admin.existingSecret` (pulling from Bitwarden at Terraform apply time, never plaintext to disk) and external Postgres datasource, reusing the Storage step's credential-sealing pattern.
+
++ **Exact chart `repoURL`/`version` pins.** Deferred to build-time live verification due to Grafana Helm chart ecosystem mid-migration (research finding 5): `grafana`/`loki` moved to `grafana-community.github.io/helm-charts`, `alloy` confirmed still at `grafana.github.io/helm-charts`, `tempo`/`mimir` to be re-verified live. Re-verify each chart's current repository and version at build before committing.
+
++ **Exact in-cluster Service names/ports.** Deferred to build-time verification: Loki/Mimir/Tempo Service names and ports (for datasource URLs and Alloy forward targets) and Grafana's Service name/port (for HTTPRoute `backendRefs`) are `releaseName`-derived; confirm each against the pinned chart at build, as the Storage step confirmed CNPG and Valkey Service spellings.
