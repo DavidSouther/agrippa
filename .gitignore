@@ -8,4 +8,4 @@ core/overlays/dev/*/charts/
 storage/overlays/dev/*/charts/
 observability/overlays/dev/*/charts/
 platform/overlays/dev/*/charts/
-platform/overlays/dev/*/chart/charts/
+platform/overlays/dev/*/*/charts/

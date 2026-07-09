@@ -9,4 +9,5 @@ resources:
   - namespace.yaml
   - ../../../../secrets/dev/platform/flagsmith
   - database.yaml
-  # helm/ lands Step 3; httproute.yaml lands Step 4
+  - helm/
+  # httproute.yaml lands Step 4

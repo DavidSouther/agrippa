@@ -9,7 +9,7 @@
 - [x] Step 0: API surface area (file layout, `apps/platform.yaml` SSA seam)
 - [x] Step 1: Wave `-10` — the `flagsmith` namespace
 - [x] Step 2: Wave `-5` — the three sealed credentials and the `flagsmith` `Database` CR
-- [ ] Step 3: Wave `0` — the Flagsmith Helm release
+- [x] Step 3: Wave `0` — the Flagsmith Helm release
 - [ ] Step 4: Wave `5` — the `HTTPRoute` and the Gateway certificate append
 - [ ] Step 5: Full GREEN — the feature test and the regression sweep
 
