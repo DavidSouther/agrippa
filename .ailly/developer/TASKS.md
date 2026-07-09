@@ -264,6 +264,34 @@ From the feature-step `2026-07-06-A-agrippa-local-k3d/features/storage-postgres-
   interface becomes evident; the conservative default per the project's YAGNI posture is inline
   now, extract on the rule-of-three (when the second real caller proves the shape).
 
+## Feature-step deferred decisions: Auth (Keycloak)
+
+From the feature-step `2026-07-06-A-agrippa-local-k3d/features/auth-keycloak/design.md` and `plan.md`:
+
++ **Dev-cluster resource pressure — watch-item for future platform components.** The Keycloak Operator's
+  default resource request (1700Mi memory) could not schedule on the single-node k3d-agrippa-dev cluster
+  (16Gi allocatable, ~99% already requested by core/networking/storage layers and the Observability layer's
+  Loki chunks-cache). Scoped down to 512Mi request / 1Gi limit to fit dev sizing; production will use the
+  upstream defaults. No change to the production overlays or the `Keycloak` CR itself — only `spec.resources`
+  filled in on the dev form. For any future feature adding a Javaish/JVM workload to dev (or any component
+  whose resource envelope unexpectedly conflicts), default to explicit dev-scaled requests rather than
+  relying on upstream defaults.
+
++ **SpiceDB OIDC and authorization fabric (deferred, tracked in `ARCHITECTURE.html`).** Keycloak provides
+  the identity/OIDC tier; SpiceDB provides the authorization tier. This feature-step stands up only Keycloak
+  itself. Authorization-policy plumbing with SpiceDB (application code consuming token scope claims, RBAC/ABAC
+  rules deployed as SpiceDB relations) is a separate future feature, upstream of any feature that needs
+  fine-grained authorization.
+
++ **Client-SDK wiring in consuming workloads.** No workload is OIDC-gated yet. Features that integrate app code
+  with Keycloak (`openidconnect`/`keycloak-js`/`python-keycloak` SDKs, token-scope validation, Keycloak admin
+  API calls) are consumer-side work for Feature 9 (Workloads) and beyond.
+
++ **`overlays/prod` and public-TLS substitution.** Local k3d uses `auth.127.0.0.1.nip.io` and the local CA;
+  production will use a public hostname (TBD in the cloud cycle) and Cloudflare ACME TLS. The `overlays/prod`
+  seam exists in the directory structure; production Keycloak configuration (hostname, TLS endpoint, upstream
+  OAuth/OIDC federation if needed) lands in the cloud cycle.
+
 ## Test-quality: bats non-final `[[ ]]` doesn't gate (cross-cutting)
 
 - **`tests/networking.bats` and `tests/storage.bats` carry non-final, non-terminal bare
@@ -279,6 +307,14 @@ From the feature-step `2026-07-06-A-agrippa-local-k3d/features/storage-postgres-
   non-final bare `[[ ]]` with an idiom that actually gates. Low urgency (both suites are
   currently green for the right underlying reason, live-verified by their own build phases) but
   a latent false-GREEN risk on any future regression in those two components.
+
+## Feature-step deferred decisions: Git hosting (Forgejo)
+
+From the feature-step `2026-07-06-A-agrippa-local-k3d/features/git-hosting-forgejo/design.md` and `plan.md`:
+
++ **forgejo-runner/Actions (CI execution) is explicitly deferred to a documented follow-up increment.** The only well-trodden Kubernetes shape for Forgejo's CI runner needs a **privileged `docker:dind` sidecar** — the first privileged container anywhere in this project (CNPG, Valkey, Istio, cert-manager, and metallb all run unprivileged). The host backend trades that privilege for a no-isolation job surface; the native non-privileged pod-per-job executor is still an author-acknowledged proof of concept upstream. The build's definition of done does not require CI, and Closing Bell names no Git-hosting or Actions task. The runner is additive: a later increment appends it — a runner Deployment, a sops-sealed 40-hex registration secret, and an executor-backend choice — with zero rework to the Forgejo server that lands now. Revisited when a production-ready non-privileged Kubernetes executor lands upstream or the project accepts its first privileged workload.
+
++ **The shared Valkey is deliberately not wired to Forgejo, by design.** Forgejo's cache/queue/session (`gitea.config.cache/queue/session`) could use the shared Valkey instance with one ACL user + one sealed credential Secret + three config keys — a recommended-not-mandatory future enhancement already researched. In-process defaults are adequate at single-replica dev scale; wiring Valkey adds a second external dependency and a third sealed credential for no proof-of-concept benefit. Kept as a documented, reversible append (the external-Valkey ACL user and Forgejo-scoped Secret stay in Storage's own design for future reference) if a later enhancement requires it.
 
 ## Design pattern: a `Database` CR must precede its consuming Deployment's own wave (cross-cutting)
 
@@ -300,3 +336,13 @@ From the feature-step `2026-07-06-A-agrippa-local-k3d/features/storage-postgres-
   there** — but any future feature-step adding a Postgres-backed app should default the
   `Database` CR to an early wave (`-5`, with the credentials) rather than transcribing Storage's
   `smoke`-fixture wave (`5`) as if it were a generally-safe precedent.
+
+## Feature-step deferred decisions: Feature flags (Flagsmith)
+
+From the feature-step `2026-07-06-A-agrippa-local-k3d/features/feature-flags-flagsmith/design.md` and `plan.md`:
+
++ **Admin bootstrap via manual browser password-reset link (not scripted imperative mutation).** The chart's own default bootstrap creates a default superuser, org, and project with a time-limited password-reset link logged to the API pod's stdout (`kubectl -n flagsmith logs <api-pod> | grep -i password-reset`). This feature-step accepted the chart's documented single-operator flow for local dev (read the link, click it in a browser, set password) rather than scripting a non-interactive `kubectl exec` Django-shell credential set step. The manual path imposes zero GitOps mutation, aligns with the cluster's declared immutability, and proves sufficient for local development. A future security-gated operator path (non-interactive CI credential setup, or Cloudflare Access integration on the admin UI) is a later feature-step or Workload concern, not built here.
+
++ **The project's own release-flag mechanism wiring to this Flagsmith instance (deferred future work).** The project `design.md` § Release Flag anticipates using this Flagsmith instance as the backing store for environment-gated platform rollouts; wiring that coupling (externalizing the `agrippa-dev` / `agrippa-prod` flags to read from Flagsmith rather than a hardcoded YAML field) is explicitly out of scope for this feature-step and left for a later cycle once both the platform's release posture and Flagsmith's own operational SLOs are proven.
+
++ **Redis/Valkey cache and `sse` real-time component (deferred as additive, optional, measured later if needed).** The chart ships both as opt-in toggles; empirically, a single-replica API plus single frontend replica on the shared CNPG `postgres` suffices for local dev, and polling fallback (no SSE) meets the feature test's reach. A future optimization cycle (measured against a real Workload's flag-evaluation latency SLOs, once Feature 9 lands) can revisit Redis wiring and SSE enablement; neither changes any manifests committed here.
