@@ -39,17 +39,17 @@ tasks 2, 3, and 6; the human study, not this test, is the authoritative judge
 of those tasks' full depth.
 
 **Steps:**
-- [ ] Step 0: API surface area (file layout, the `apps/workloads.yaml` sync
+- [x] Step 0: API surface area (file layout, the `apps/workloads.yaml` sync
   seam, GitOps-consumed stubs)
-- [ ] Step 1: The git submodules and the imperative `mise run workloads:build`
+- [x] Step 1: The git submodules and the imperative `mise run workloads:build`
   image pipeline
-- [ ] Step 2: Wave 0 — the `resume` workload wired live, plus its Gateway-cert
+- [x] Step 2: Wave 0 — the `resume` workload wired live, plus its Gateway-cert
   SAN append
-- [ ] Step 3: Wave 0 — the `trips` workload wired live, plus its Gateway-cert
+- [x] Step 3: Wave 0 — the `trips` workload wired live, plus its Gateway-cert
   SAN append
-- [ ] Step 4: The packaging Helm charts (`charts/resume/`, `charts/trips/`),
+- [x] Step 4: The packaging Helm charts (`charts/resume/`, `charts/trips/`),
   real and helm-unittest-tested
-- [ ] Step 5: Full GREEN — `tests/workloads.bats`, `tests/agrippa.bats`
+- [x] Step 5: Full GREEN — `tests/workloads.bats`, `tests/agrippa.bats`
   verification, and the regression sweep
 
 **Libraries & Skills (carried forward from `design.md`/`research.md`; load
