@@ -1,0 +1,10 @@
+# Namespace observability: Loki, Tempo, Mimir, Grafana, and Alloy all land
+# here. helmCharts: inflation runs `helm template`, which never emits a
+# Namespace object on its own -- the same gap core/overlays/dev/istio-base's
+# and storage/overlays/dev/cnpg-operator's own namespace.yaml fill.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"

@@ -8,3 +8,4 @@
 # side effect of local verification runs, never git-tracked content.
 core/overlays/dev/*/charts/
 storage/overlays/dev/*/charts/
+observability/overlays/dev/*/charts/
