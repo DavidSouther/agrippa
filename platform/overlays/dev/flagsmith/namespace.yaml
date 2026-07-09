@@ -1,0 +1,9 @@
+# Wave -10: the flagsmith Namespace (full content now -- a Namespace has no
+# spec, matching keycloak/operator/namespace.yaml's and forgejo/namespace.yaml's
+# own precedent).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: flagsmith
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
