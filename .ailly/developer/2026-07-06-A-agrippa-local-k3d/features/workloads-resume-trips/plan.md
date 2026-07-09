@@ -1,6 +1,6 @@
 # Implementation Plan: Workloads (resume + trips static sites, in-cluster)
 
-*Draft 2026-07-09*
+*Reviewed 2026-07-09*
 
 > Feature-step plan (feature-loop shape) inside the Project-Shape session
 > `2026-07-06-A-agrippa-local-k3d`. This is **Feature 9: Workloads (resume +
@@ -67,9 +67,12 @@ before each build step):**
   step below explicitly defers to build time: the exact `node:24` base-image
   digest, the real jiffies `/blog` output shape (directory index vs. flat
   file) and the nginx clean-URL rule it needs, the exact `k3d image import
-  --mode direct` invocation and flags, the two upstream repos' pinned
-  submodule commits, and whichever mechanism actually disables (or need not
-  disable) the `workloads` Application's submodule fetch.
+  --mode direct` invocation and flags, and the two upstream repos' pinned
+  submodule commits. The ArgoCD submodule-fetch prerequisite
+  (`reposerver.enable.git.submodule: "false"` on `argocd-cmd-params-cm`) is
+  already satisfied — applied and live-verified by the coordinator before
+  this feature-step's build began (see § Resolved by the long-loop reviewer,
+  item 3) — so no research or build-time decision remains on that front.
 - No library-shipped agentic skill exists for git submodules, Docker
   multi-stage builds, `k3d`, nginx, helm-unittest, or `@davidsouther/jiffies`
   (reconfirmed by this feature's own cleared `research.md`). Build to
@@ -486,17 +489,15 @@ httproute.yaml}` (image `trips:dev`, hostname
 gateway-cert.yaml`'s `dnsNames` (re-check the live list again — Step 2's own
 append should already be there; add alongside it, not instead of it).
 
-Also resolve the design's flagged ArgoCD submodule-fetch risk here, now that
-both `resource:` entries (and therefore the `workloads` Application's own
-live git source) are real: confirm whether ArgoCD's repo-server, cloning
-`agrippa` to render `workloads/overlays/dev`, attempts to fetch the (private)
-`trips` submodule and `401`s the whole clone, or ignores/logs and proceeds
-(the plain-YAML render never reads submodule content, so this is purely a
-fetch-side risk, not a render-side one). If it does 401 the clone,
-proactively disable submodule fetch for the `workloads` Application (the
-exact mechanism is a `research:public` lookup at build time — an ArgoCD
-repository-connection or Application-source setting, re-derived against
-whatever ArgoCD version is live).
+The ArgoCD submodule-fetch prerequisite this step's design once flagged is
+**already satisfied** — the coordinator applied and live-verified
+`reposerver.enable.git.submodule: "false"` on `argocd-cmd-params-cm` as its
+own prerequisite commit on `main`, before this feature-step's build began
+(see § Resolved by the long-loop reviewer, item 3, and `design.md` §
+Failure modes / § Cross-step touches). That fix is global (every
+Application's shared `agrippa` repoURL checkout, not just `workloads`), so
+there is no ArgoCD-side action for this step to take. This step proceeds
+directly to wiring `trips` live.
 
 **Tests**
 
@@ -520,9 +521,11 @@ test "the trips workload lands live; tests/workloads.bats passes in full":
 - Edge case: confirm the shared cert now carries 7 SANs total (5 original +
   Step 2's + this step's), all previous ones undisturbed — a `grep -c`
   count, not just a presence check.
-- Edge case: verify the ArgoCD repo-server clone behavior against the
-  private `trips` submodule live (as above) rather than assuming either
-  outcome; this is the design's own named highest-risk item for this step.
+- Edge case: confirm the `workloads` Application still reconciles cleanly
+  now that `.gitmodules` references the private `trips` submodule live — the
+  global `reposerver.enable.git.submodule: "false"` prerequisite (already
+  applied and live-verified by the coordinator before this feature-step's
+  build began) should make this a non-event; verify rather than assume.
 - Edge case: `trips`'s namespace must not collide with any already-live
   namespace (same list as Step 0's edge case, plus `resume` itself now).
 - Edge case: cumulative resource pressure again — two static-nginx pods are
@@ -690,9 +693,11 @@ test "no regression to earlier harness":
 - Edge case: cumulative resource pressure one more time, now with every
   component in the project live simultaneously — `kubectl top nodes` before
   declaring done, per the design's own named failure mode.
-- Edge case: confirm the ArgoCD submodule-fetch mitigation from Step 3 (if
-  applied) does not itself break the `workloads` Application's ordinary
-  reconcile of non-submodule content.
+- Edge case: confirm `reposerver.enable.git.submodule: "false"` is live on
+  the repo-server (already verified by the coordinator before this
+  feature-step's build began; re-check here as a regression guard, not new
+  work) and that it does not itself break the `workloads` Application's
+  ordinary reconcile of non-submodule content.
 
 **Implementation Outline**
 
@@ -708,3 +713,226 @@ run bats tests/cluster-core.bats tests/gitops.bats tests/networking.bats \
   tests/storage.bats tests/git-hosting.bats tests/auth.bats \
   tests/observability.bats tests/feature-flags.bats tests/rotate-keys.bats
 ```
+
+## Resolved by the long-loop reviewer (2026-07-09)
+
+This is a paper plan against the cleared feature `design.md`; it has not been
+built. A separately dispatched long-loop reviewer read it cold and, per the
+completed siblings' precedent (`git-hosting-forgejo/plan.md` § Resolved by the
+long-loop reviewer), checked: (1) transcription fidelity against the cleared
+`design.md`, including the shared-cert-SAN-append ratification and the
+private-`trips` correction; (2) the plan's repo-state claims against the
+actually-committed files and the live `k3d-agrippa-dev` cluster (read-only);
+(3) the design's flagged ArgoCD private-submodule-fetch risk that Step 3 was
+originally meant to resolve; (4) the six-step decomposition for the "consumer
+lands before its prerequisite" defect class the Features 5-7 Database-CR
+deadlock was; and (5) Step 4's charts (no `Certificate` template) plus
+`test:chart`'s green-on-empty-to-real transition. Items 1, 2, 4, and 5 cleared
+to their conservative defaults at review time. **Item 3 was escalated** at
+review time — the design's then-stated mitigation mechanism did not exist at
+the granularity claimed, the real mechanism was a whole-cluster ArgoCD-install
+change the feature-step's design explicitly scoped out, and the risk was
+build-breaking for the entire app-of-apps tree, not just `workloads` — exactly
+the same escalation class as the forgejo sibling's own item 4 (a
+build-breaking, out-of-recorded-scope prerequisite defect a plan-gate reviewer
+correctly declines to decide unilaterally). **The coordinator has since
+resolved item 3 directly (2026-07-09)**: the design was corrected and the
+global `reposerver.enable.git.submodule: "false"` prerequisite was applied and
+live-verified on `main`, before this feature-step's own build begins — see
+item 3 below for the full record. With item 3 resolved, all five items are
+Decided and **the draft gate clears below**. The working tree and cluster were
+left exactly as found by the original read-only review; the coordinator's fix
+landed separately, as its own prerequisite commit, and this edit brings the
+plan's text in line with that already-applied, already-verified state.
+
+**1. Transcription fidelity against the cleared `design.md` (shared-cert-SAN
+ratification; private-`trips` correction). Decided: faithful.** Every step
+transcribes the design's § Specification: the two-`resources:`-entry composition
+under the unchanged `apps/workloads.yaml` (Steps 0, 2, 3), the `apps/workloads.yaml`
+`ServerSideApply`/`ServerSideDiff` sync seam (Step 0), the `-10`/`0` two-tier
+wave scheme with no `-5` tier (Steps 0, 2, 3), the imperative git-submodule +
+`node:24` Docker + `k3d image import --mode direct` pipeline outside GitOps
+(Step 1), `imagePullPolicy: Never` with modest explicit `resources` and the
+explicit-`matches:` HTTPRoute (Steps 2, 3), and the proof-and-regression sweep
+(Step 5). The **shared-cert-SAN-append ratification** (design's Resolved item 1)
+is carried correctly: Steps 2 and 3 each append **one** SAN to the single shared
+`core/overlays/dev/gateway-cert.yaml` (`davidsouther.com.127.0.0.1.nip.io`,
+`trips.davidsouther.com.127.0.0.1.nip.io`), Step 4's charts template a
+Deployment/Service/HTTPRoute and **no** `Certificate`, and no per-workload cert
+appears anywhere. The **private-`trips` correction** (design's Resolved item 7)
+is carried correctly: Step 1 states `resume` public / `trips` private and relies
+on the operator's authenticated credential helper for `trips`, and `.gitmodules`
+is accounted for as a new committed file. The ArgoCD submodule-fetch
+prerequisite (design's § Failure modes / § Cross-step touches) is also carried
+correctly now: the design was corrected and the global
+`reposerver.enable.git.submodule: "false"` fix is already applied and
+live-verified as a prerequisite commit ahead of this feature-step's own build
+— see item 3.
+
+**2. Repo-state claims verified live (read-only). Decided: accurate — no change
+needed.** `apps/workloads.yaml` carries `syncPolicy.automated` only (no
+`syncOptions`, no `compare-options`), so Step 0's seam has not landed. The
+top-level `workloads/overlays/dev/kustomization.yaml` is exactly `resources: []`
+with no `resume/`/`trips/` subdir yet. `core/overlays/dev/gateway-cert.yaml`'s
+`dnsNames` carries exactly the five SANs the design names (`argocd`,
+`dashboard.davidsouther.com`, `auth`, `git.davidsouther.com`, `flagsmith`),
+neither workload host present, so Steps 2-3's one-line appends are specified
+correctly. `mise.toml`'s `[tools]` has no `node`/`npm` (only `k3d = "5.9.0"`
+among the relevant pins) and no `[tasks."workloads:build"]` entry — both as
+claimed. `scripts/test-feature.sh` already carries `workloads.bats` in its
+probe-suite exclusion `case` list. No top-level `charts/` directory and no
+`.gitmodules` exist yet; `workloads/` holds only `overlays/dev/kustomization.yaml`.
+`scripts/test-chart.sh` is green-on-empty (no `charts/` → skip). `tests/workloads.bats`
+exists as a committed RED-baseline artifact, and the live `workloads` Application
+is `Synced/Healthy` on the empty overlay (all seven Applications Synced/Healthy).
+Every repo-state claim the plan makes holds.
+
+**3. The ArgoCD private-submodule-fetch risk (Step 3's stated mitigation).
+Decided: resolved by the coordinator — the design was corrected and the global
+prerequisite is already applied and live-verified, so this feature-step's own
+Steps need no ArgoCD-side action.** At review time this was escalated, not
+decided: the mitigation as then specified did not exist, and the correct
+mitigation was a whole-cluster ArgoCD-install change the feature-step's design
+then explicitly scoped out — with a blast radius (the entire app-of-apps tree)
+and a trigger point (Step 1's `.gitmodules` commit) both larger and earlier
+than the plan framed. That escalation was not unnecessary caution: it
+identified real, build-breaking infrastructure work, mis-located and
+mis-scoped in both the design and the plan as they then stood. Findings from
+that review, all verified at the time and still accurate as history:
+
+- **The fetch failure is fatal, and certain.** ArgoCD's repo-server runs `git
+  submodule update --init --recursive` on every checkout when submodules are
+  enabled; a private submodule it cannot fetch fails that command, and the
+  failure aborts manifest generation for the Application (argoproj/argo-cd#10174,
+  a still-open request to make inaccessible submodules non-fatal — today they are
+  fatal). Live: the `argocd` namespace holds **no** `repository` or `repo-creds`
+  secret, so the public `agrippa` repo is fetched anonymously and there is **no**
+  credential that could authenticate the private `github.com/davidsouther/trips`
+  submodule. The `401` is determined, not a reachability blip (the design already
+  says this; it is confirmed here).
+- **The blast radius is the whole tree, not just `workloads`.** All seven
+  Applications (`argocd`, `core`, `observability`, `platform`, `root`, `storage`,
+  `workloads`) share `repoURL: https://github.com/DavidSouther/agrippa.git`
+  (verified live). The repo-server's submodule fetch happens on the shared
+  per-`repoURL` checkout, so a `.gitmodules` referencing the private `trips` repo
+  breaks manifest generation for **every** layer's Application, not only the
+  `workloads` one whose overlay references no submodule content. And it breaks at
+  the moment `.gitmodules` is committed — **Step 1** — which is two steps *before*
+  Step 3, where the plan proposes to address it. In the interim the entire GitOps
+  tree would be un-renderable.
+- **No per-Application disable exists.** The design (§ Failure modes) and the plan
+  (Step 3) both frame the fix as "disable submodule fetch for the `workloads`
+  Application," via "an ArgoCD repository-connection or Application-source
+  setting." No such per-Application or per-repository setting exists
+  (argoproj/argo-cd#3799 is an open feature request to add `source.fetch_submodules:
+  false` per-Application; it is not implemented). The only mechanism is the
+  **global** repo-server toggle `ARGOCD_GIT_MODULES_ENABLED=false`, set
+  declaratively via the `reposerver.enable.git.submodule: "false"` key in the
+  `argocd-cmd-params-cm` ConfigMap (verified live: the repo-server env sources
+  `ARGOCD_GIT_MODULES_ENABLED` `valueFrom` that optional key, which is absent, so
+  fetching is enabled by default). That ConfigMap lives in the ArgoCD install
+  layer `apps/platform/argocd/`, which the design's § Cross-step touches does
+  **not** list among this step's owned files — the same ArgoCD/`core`-layer the
+  cleared research decision (h) deliberately refused to modify (its option a1,
+  the cluster-wide load-restrictor relaxation) for being out of scope and
+  higher-blast-radius. Disabling submodules globally is harmless in effect (no
+  Application anywhere references submodule content, and the local images are
+  already imported), but it is a whole-cluster ArgoCD-config change, and choosing
+  to make it — and to sequence it *ahead of* Step 1's `.gitmodules` commit rather
+  than at Step 3 — re-assigns ownership and ordering the cleared design fixed.
+
+Per the long-loop escalation rule this fired trigger **(b) out of recorded
+scope**: the only real fix changed a system (`apps/platform/argocd/`'s
+`argocd-cmd-params-cm`) the design's Scope/Cross-step-touches then excluded, and
+it needed to be re-sequenced ahead of the build to avoid bricking every layer.
+This was the same class as the forgejo sibling's escalated item 4 (a
+build-breaking prerequisite-ordering defect whose fix required revisiting
+cleared design scope): correcting it was outside a plan-gate reviewer's
+transcribe-faithfully remit, so the reviewer correctly declined to decide it
+unilaterally and escalated for the coordinator to resolve.
+
+**Resolved by the coordinator (2026-07-09).** The coordinator resolved item 3
+directly, matching the exact pattern used for a prior sibling's own
+Database-CR-wave-ordering escalation: `design.md` § Failure modes and §
+Cross-step touches were corrected from the non-existent "per-Application"
+mechanism to the real global one, and `reposerver.enable.git.submodule:
+"false"` was added to `argocd-cmd-params-cm` via a new patch in
+`apps/platform/argocd/kustomization.yaml` — this key was already wired to the
+repo-server's `ARGOCD_GIT_MODULES_ENABLED` env var in the pinned v3.4.4
+install manifest (confirmed live). Applied, the `argocd` Application
+self-reconciled, the repo-server was restarted to pick up the env change
+(ConfigMap-sourced env vars are not live-reloaded), and all seven Applications
+were reconfirmed Synced/Healthy afterward. This landed as its own prerequisite
+commit on `main`, already pushed, **before** this feature-step's own Step 1.
+With the prerequisite already satisfied, Step 1's `.gitmodules` commit is safe
+to land as originally planned — no ArgoCD-side mitigation is needed from this
+feature-step's own Steps at all — and Step 3 now proceeds directly to wiring
+`trips` live with no ArgoCD-config content of its own (see the corrected Step
+3 body above, and Step 5's regression-guard edge case). Because item 3 is now
+resolved, it is no longer a prerequisite blocking any subsequent step, and the
+gate clears.
+
+**4. The six-step decomposition and the Step 2/3 image-build sequencing (the
+Features 5-7 Database-CR deadlock class). Decided: sound — the step ORDER, not
+just wave annotations, guarantees Step 1 completes before Step 2/3 apply
+anything.** Unlike the forgejo deadlock (a wave-ordering defect *inside* ArgoCD,
+where a wave-`0` consumer health-gated a wave-`5` producer), the image build here
+is an imperative pre-step **entirely outside** ArgoCD with no wave number at all.
+Step 1 runs `mise run workloads:build` (submodule init → `docker build` →
+`k3d image import`), materializing `resume:dev`/`trips:dev` in the node's
+containerd; only then do Steps 2 and 3 commit the overlays that ArgoCD reconciles
+into the `imagePullPolicy: Never` Deployments. The plan's linear Step 1 → Step 2
+→ Step 3 order enforces build-before-apply, and within ArgoCD the two Deployments
+sit at wave `0` behind their wave-`-10` Namespaces with no intra-tree producer/
+consumer ordering to deadlock. The residual `ErrImageNeverPull` case (Deployment
+scheduled against a cluster where `workloads:build` was not re-run) is not a
+deadlock but a self-healing, documented operational precondition: it fails fast
+and honestly, and the pod schedules on the next kubelet retry once the image is
+imported — the plan's Step 2 edge case ("verify live, do not assume the image is
+already imported") already names it. No consumer-before-prerequisite defect
+exists.
+
+**5. Step 4's charts (no `Certificate` template) and `test:chart`'s
+green-on-empty-to-real transition. Decided: correct — no change needed.** The
+charts genuinely need no `Certificate` template: the shared Gateway's single
+`https` listener references only `agrippa-gateway-tls`, so a per-workload cert
+would be unreferenced and inert, and prod terminates TLS at the Cloudflare edge —
+matching design Resolved item 1. Step 4's own edge case asserts this by fiat
+(`helm template charts/resume | grep -c 'kind: Certificate'` == `0`). And
+`scripts/test-chart.sh` will exercise the charts for the first time exactly as
+the plan claims: verified live, it short-circuits green today because no `charts/`
+directory exists; once Step 4 authors `charts/resume/tests/` and
+`charts/trips/tests/`, its discovery loop (`for chart in charts/*/`, gated on a
+`${chart}tests` subdirectory) finds both and runs `helm unittest` per chart,
+setting `found=1` so the green-on-empty message no longer prints. The transition
+from green-on-empty to a real exercised check is genuine.
+
+**Reviewer verification (2026-07-09).** Checked live, read-only, against the
+committed tree and the `k3d-agrippa-dev` cluster context: `apps/workloads.yaml`
+(no seam), `workloads/overlays/dev/kustomization.yaml` (`resources: []`),
+`core/overlays/dev/gateway-cert.yaml` (five SANs, neither workload host),
+`mise.toml` (no `node`/`npm` pin, no `workloads:build` task), `scripts/test-feature.sh`
+(`workloads.bats` excluded), `scripts/test-chart.sh` (green-on-empty on absent
+`charts/`), absent `charts/` and `.gitmodules`, and `tests/workloads.bats`
+(committed RED baseline). The submodule finding was confirmed from ArgoCD's
+documented fatal-submodule-fetch behavior and global-only toggle
+(argoproj/argo-cd#10174, #3799), the live repo-server env (`ARGOCD_GIT_MODULES_ENABLED`
+sourced from the absent `argocd-cmd-params-cm` key → enabled), the absence of any
+`repository`/`repo-creds` secret in `argocd`, and the shared `repoURL` across all
+seven Applications. No live cluster state was mutated by that read-only pass;
+item 3's fix was applied and live-verified separately by the coordinator, as
+its own prerequisite commit on `main`, ahead of this feature-step's own build
+(recorded in item 3 above).
+
+**Gate status: CLEARED.** Items 1, 2, 4, and 5 decided to their conservative
+defaults; item 3, originally escalated as a build-breaking,
+out-of-recorded-scope prerequisite defect (the ArgoCD private-submodule fetch
+would have broken the whole app-of-apps tree at Step 1's `.gitmodules`
+commit), is now resolved — the coordinator added the global
+`reposerver.enable.git.submodule: "false"` toggle to the `apps/platform/argocd/`
+install layer as a pre-Step-1 prerequisite, applied and live-verified it, and
+corrected the design's § Failure modes and § Cross-step touches from the
+non-existent per-Application mechanism to the real global one. This plan's
+Step 3 and Step 5 have been reworded to match: no ArgoCD-side action remains
+for this feature-step's own Steps. With all five items Decided, the draft
+marker moves to `*Reviewed 2026-07-09*` and the plan is cleared to build.
