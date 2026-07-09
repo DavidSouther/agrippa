@@ -24,3 +24,7 @@ spec:
         login: true
         passwordSecret:
           name: smoke-db
+      - name: keycloak
+        login: true
+        passwordSecret:
+          name: keycloak-db
