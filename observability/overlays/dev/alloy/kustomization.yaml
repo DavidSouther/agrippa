@@ -1,6 +1,77 @@
-# Wave 5: Alloy DaemonSet self-discovering the cluster. Chart lands Step 4.
+# Wave 5: Alloy DaemonSet, self-discovering the cluster and forwarding
+# metrics->Mimir, logs->Loki, traces->Tempo. Chart NOT moved off
+# grafana.github.io/helm-charts (research:public, re-verified live at build,
+# confirming this feature-step's own research prediction) -- version 1.10.0,
+# the newest release as of this build.
+#
+# controller.type: daemonset is already the chart's own default; kept
+# implicit. The River/Flow pipeline config below is the chart's own primary
+# configuration surface (alloy.configMap.content, empty by default) --
+# three independent discovery->forward pipelines, syntax cross-checked
+# against the component reference docs at build (research:public):
+#   - metrics: discovery.kubernetes (role=pod) -> prometheus.scrape ->
+#     prometheus.remote_write to Mimir's gateway push endpoint.
+#   - logs: the same discovery.kubernetes target set -> loki.source.kubernetes
+#     -> loki.write to Loki's singleBinary Service push endpoint (gateway
+#     disabled upstream in Step 1, so this goes straight to "loki":3100).
+#   - traces: otelcol.receiver.otlp (grpc+http) -> otelcol.exporter.otlp to
+#     Tempo's OTLP gRPC ingest port (4317), TLS disabled (in-cluster plain
+#     gRPC, matching Tempo's own receiver default).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
   argocd.argoproj.io/sync-wave: "5"
-helmCharts: []
+helmCharts:
+  - name: alloy
+    repo: https://grafana.github.io/helm-charts
+    version: 1.10.0
+    releaseName: alloy
+    namespace: observability
+    valuesInline:
+      alloy:
+        configMap:
+          content: |
+            discovery.kubernetes "pods" {
+              role = "pod"
+            }
+
+            prometheus.scrape "cluster" {
+              targets    = discovery.kubernetes.pods.targets
+              forward_to = [prometheus.remote_write.mimir.receiver]
+            }
+
+            prometheus.remote_write "mimir" {
+              endpoint {
+                url = "http://mimir-gateway.observability.svc/api/v1/push"
+              }
+            }
+
+            loki.source.kubernetes "pods" {
+              targets    = discovery.kubernetes.pods.targets
+              forward_to = [loki.write.loki.receiver]
+            }
+
+            loki.write "loki" {
+              endpoint {
+                url = "http://loki.observability.svc:3100/loki/api/v1/push"
+              }
+            }
+
+            otelcol.receiver.otlp "default" {
+              grpc {}
+              http {}
+
+              output {
+                traces = [otelcol.exporter.otlp.tempo.input]
+              }
+            }
+
+            otelcol.exporter.otlp "tempo" {
+              client {
+                endpoint = "tempo.observability.svc:4317"
+
+                tls {
+                  insecure = true
+                }
+              }
+            }
