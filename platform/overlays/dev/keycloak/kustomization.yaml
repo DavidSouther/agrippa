@@ -4,7 +4,8 @@
 # own metadata.namespace explicitly (exactly as storage's authored CRs do).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-resources: []
-# operator/ lands Step 1; the sealed-credential sub-kustomization and
-# keycloak-database.yaml land Step 2; keycloak.yaml lands Step 3;
-# keycloak-realm.yaml/keycloak-httproute.yaml land Step 4
+resources:
+  - operator/
+# the sealed-credential sub-kustomization and keycloak-database.yaml land
+# Step 2; keycloak.yaml lands Step 3; keycloak-realm.yaml/
+# keycloak-httproute.yaml land Step 4
