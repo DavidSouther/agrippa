@@ -1,7 +1,21 @@
-# Wave -10: the Keycloak Operator + its two CRDs, in the new `keycloak`
+# Wave -10: the Keycloak Operator + its four CRDs, in the new `keycloak`
 # namespace. `namespace: keycloak` is safe here -- only Operator resources
-# live in this sub-kustomization; the two CRDs and the Namespace itself are
+# live in this sub-kustomization; the four CRDs and the Namespace itself are
 # cluster-scoped, so the namespace transformer skips them.
+#
+# BUILD-TIME CORRECTION (this feature-step, live-verified): design.md/plan.md
+# researched against the 26.6.x line, which shipped only two CRDs (Keycloak,
+# KeycloakRealmImport). By build time the pinned upstream had advanced to
+# 26.7.0, which ships two more (KeycloakOIDCClient, KeycloakSAMLClient) --
+# and 26.7.0's operator Deployment unconditionally registers JOSDK
+# controllers/informers for all four kinds
+# (QUARKUS_OPERATOR_SDK_CONTROLLERS_*_NAMESPACES=JOSDK_WATCH_CURRENT for all
+# four in kubernetes.yml's Deployment env). Installing only two CRDs left the
+# operator pod CrashLoopBackOff on startup: "Couldn't start informer for
+# keycloaksamlclients.k8s.keycloak.org/v2alpha1 resources ... GET
+# .../keycloaksamlclients?resourceVersion=0. Message: Not Found." All four
+# CRDs must be installed together even though this feature only authors
+# Keycloak/KeycloakRealmImport CRs.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: keycloak
@@ -14,4 +28,6 @@ resources:
   # since advanced). Pinned explicitly; do not float the tag.
   - https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.7.0/kubernetes/keycloaks.k8s.keycloak.org-v1.yml
   - https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.7.0/kubernetes/keycloakrealmimports.k8s.keycloak.org-v1.yml
+  - https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.7.0/kubernetes/keycloakoidcclients.k8s.keycloak.org-v1.yml
+  - https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.7.0/kubernetes/keycloaksamlclients.k8s.keycloak.org-v1.yml
   - https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.7.0/kubernetes/kubernetes.yml
