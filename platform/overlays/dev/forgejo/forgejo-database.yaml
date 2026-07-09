@@ -1,0 +1,12 @@
+# Wave -5: Step 0 skeleton -- name-only stub, no spec. Spec lands Step 2.
+# NOTE metadata.namespace: storage -- CNPG's Database.spec.cluster is a
+# same-namespace-only LocalObjectReference; this file lives in this
+# feature's tree but the object lands in `storage`, exactly as
+# keycloak-database.yaml's own precedent.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: forgejo
+  namespace: storage
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
