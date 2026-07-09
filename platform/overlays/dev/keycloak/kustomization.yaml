@@ -9,4 +9,5 @@ resources:
   - ../../../../secrets/dev/platform/keycloak
   - keycloak-database.yaml
   - keycloak.yaml
-# keycloak-realm.yaml/keycloak-httproute.yaml land Step 4
+  - keycloak-realm.yaml
+  - keycloak-httproute.yaml
