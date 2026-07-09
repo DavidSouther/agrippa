@@ -5,5 +5,7 @@
 # precedent.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-resources: []   # namespace.yaml (Step 1), ../../../../secrets/dev/platform/flagsmith
-                 # + database.yaml (Step 2), helm/ (Step 3), httproute.yaml (Step 4)
+resources:
+  - namespace.yaml
+  # ../../../../secrets/dev/platform/flagsmith + database.yaml land Step 2
+  # helm/ lands Step 3; httproute.yaml lands Step 4

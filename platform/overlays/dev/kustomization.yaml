@@ -9,3 +9,4 @@ resources:
   - argocd.yaml
   - keycloak/
   - forgejo/
+  - flagsmith/
