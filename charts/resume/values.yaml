@@ -1,0 +1,32 @@
+# Packaging chart for the resume workload -- kept aligned with
+# workloads/overlays/dev/resume/*.yaml (the live GitOps render path) by
+# discipline, not generated from it. Defaults here mirror that live overlay's
+# hand-authored values exactly.
+image:
+  repository: resume
+  tag: dev
+  pullPolicy: Never
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 32Mi
+  limits:
+    memory: 128Mi
+
+hostname: davidsouther.com.127.0.0.1.nip.io
+
+# The personal site alone carries a /healthz endpoint (parent design decision
+# 4); toggles the Deployment's probes between /healthz and / and whether the
+# Service/HTTPRoute-visible port is probed via /healthz at all.
+healthz: true
+
+service:
+  port: 80
+
+gateway:
+  name: agrippa-gateway
+  namespace: istio-ingress
+  sectionName: https
