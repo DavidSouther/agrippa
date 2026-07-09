@@ -8,3 +8,4 @@ kind: Kustomization
 resources:
   - argocd.yaml
   - keycloak/
+  - forgejo/

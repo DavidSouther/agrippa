@@ -33,8 +33,8 @@ proving Git hosting is live and usable end-to-end, with **no
 runner/Actions/CI assertion** (deferred).
 
 **Steps:**
-- [ ] Step 0: API surface area (file layout, `apps/platform.yaml` sync seam)
-- [ ] Step 1: Wave `-10` — the `forgejo` Namespace, wired into the shared `platform` overlay
+- [x] Step 0: API surface area (file layout, `apps/platform.yaml` sync seam)
+- [x] Step 1: Wave `-10` — the `forgejo` Namespace, wired into the shared `platform` overlay
 - [ ] Step 2: Wave `-5` — sealing the admin + DB credentials, the storage `managed.roles[]` append, and the `forgejo` `Database` CR
 - [ ] Step 3: Wave `0` — the Forgejo chart, its `HTTPRoute`, and the Gateway-cert SAN append
 - [ ] Step 4: Full GREEN — the authenticated admin + push proof, and the regression sweep
