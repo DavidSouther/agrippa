@@ -10,3 +10,5 @@ resources:
   - tempo/
   - mimir/
   - grafana/
+  - alloy/
+  - grafana-httproute.yaml

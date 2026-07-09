@@ -1,4 +1,10 @@
-# Wave 5: routes the shared Gateway to Grafana. Spec lands Step 4.
+# Wave 5: routes the Grafana dev host through the shared Gateway to the
+# Grafana Service (plain HTTP -- confirmed live against the pinned chart's
+# service.yaml default; no DestinationRule needed, unlike ArgoCD's HTTPS
+# backend). `matches` is authored explicitly, matching the Gateway API CRD's
+# own schema default for an omitted rule (PathPrefix "/") -- the Networking
+# feature-step's own found-and-fixed omitted-`matches` SMD-diff caveat
+# (core/overlays/dev/argocd-httproute.yaml), reused verbatim here.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -6,3 +12,18 @@ metadata:
   namespace: observability
   annotations:
     argocd.argoproj.io/sync-wave: "5"
+spec:
+  parentRefs:
+    - name: agrippa-gateway
+      namespace: istio-ingress
+      sectionName: https
+  hostnames:
+    - dashboard.davidsouther.com.127.0.0.1.nip.io
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: grafana
+          port: 3000

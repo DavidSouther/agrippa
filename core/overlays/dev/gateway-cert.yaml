@@ -10,6 +10,7 @@ spec:
   secretName: agrippa-gateway-tls
   dnsNames:
     - argocd.127.0.0.1.nip.io
+    - dashboard.davidsouther.com.127.0.0.1.nip.io
   issuerRef:
     name: agrippa-ca
     kind: ClusterIssuer
