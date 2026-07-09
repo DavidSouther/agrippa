@@ -1,0 +1,12 @@
+# Wave -10: the Keycloak Operator + its two CRDs, in the new `keycloak`
+# namespace. `namespace: keycloak` is safe here -- only Operator resources
+# live in this sub-kustomization; the two CRDs and the Namespace itself are
+# cluster-scoped, so the namespace transformer skips them.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: keycloak
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "-10"
+resources:
+  - namespace.yaml
+  # the 3 pinned raw-manifest URLs (2 CRDs + kubernetes.yml) land Step 1
