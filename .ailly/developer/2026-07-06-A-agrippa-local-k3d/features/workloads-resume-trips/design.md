@@ -1,6 +1,6 @@
 # Feature Design: Workloads (resume + trips static sites, in-cluster)
 
-*Draft 2026-07-09*
+*Reviewed 2026-07-09*
 
 > Feature-step design (feature-loop shape) inside the Project-Shape session
 > `2026-07-06-A-agrippa-local-k3d`. This is **Feature 9: Workloads (resume +
@@ -269,10 +269,14 @@ test.
 - **ArgoCD fetching the submodules over the network at reconcile time.** ArgoCD's
   repo-server fetches submodules by default when cloning, but the live path (the
   plain-YAML overlays) references **none** of the submodule content, and the
-  images are already imported locally. The fetch is therefore harmless if it
-  succeeds and unnecessary either way. If it ever slows or fails the `workloads`
-  sync (a github reachability blip), disable submodule fetch for that
-  Application. Watch at build, do not pre-optimize.
+  images are already imported locally. The fetch is unnecessary either way. Because
+  `trips` is **private** (see § The git submodules), ArgoCD's default submodule
+  fetch will predictably `401` on it unless the repo-server carries a
+  `github.com/davidsouther/trips` credential, so this is a determined auth failure,
+  not merely a `github reachability blip`. Proactively disable submodule fetch for
+  the `workloads` Application (the plain-YAML render references none of the submodule
+  content, so it is unaffected), rather than waiting for it to bite. Confirm at build
+  whether the repo-server 401s the whole clone or logs and proceeds.
 - **Cumulative single-node resource pressure** (the Flagsmith OOMKill, `db93c91`,
   is live evidence). Two static-nginx pods are cheap, but sized conservatively
   (see § The Deployments). If either will not schedule, check `kubectl describe
@@ -329,7 +333,18 @@ cross-namespace credential, no `Database` CR, and no `managed.roles[]` append.
 `git submodule add https://github.com/davidsouther/resume.git workloads/resume`
 and the equivalent for `trips`, producing a committed `.gitmodules` (two
 `[submodule "workloads/<name>"]` entries) plus two gitlink entries pinning each
-upstream at a commit. Both upstream repos are **public** and stay **untouched**.
+upstream at a commit. `resume` is a **public** repo; `trips` is **private**
+(verified live this review: `gh` reports `isPrivate: true` and the unauthenticated
+git smart-HTTP endpoint `401`s for `trips`, whereas `resume` `200`s; the parent
+design records this correctly as "one public, one private", while this
+feature-step's own `research.md` and `research/public.md` mislabeled both as
+public, an inference drawn from David's authenticated `gh api` fetches succeeding,
+not from actual anonymous accessibility). Both stay **untouched**. David's
+authenticated git resolves both submodules (his credential helper supplies the
+`trips` token non-interactively, verified live via `git ls-remote`); an
+unauthenticated third-party clone would `401` on the `trips` submodule. The operator
+flow and the Closing Bell run on David's own authenticated machine, so the measured
+path holds; see the reviewer block for the ArgoCD-fetch implication.
 The submodule directories are the Docker build context's source. They are **not**
 referenced by any kustomize overlay, so ArgoCD's plain-YAML render never depends
 on them being initialized. `git submodule update --init` is a real prerequisite
@@ -704,6 +719,106 @@ This is closer to confirming an already-prescribed convention than a live choice
 every sibling uses per-component namespaces, and `ROUTING.md` plus the parent
 design isolate trips, so per-workload namespaces are the strong default. A single
 `workloads` namespace remains the reasonable alternative if preferred.
+
+### Resolved by the long-loop reviewer (2026-07-09)
+
+These were the design's Open Artifact Decisions plus the submodule-auth assumption:
+concrete choices this design invents that are not fixed by a skill template, an
+existing project convention, or the cleared `research.md`. Each is decided to its
+proposed conservative default. No escalation trigger fired for the design's own
+open items: every one is reversible within this step's own subtree, none exceeds the
+recorded scope, and repo conventions determine each default. One live check
+(item 7) surfaced a factual correction to the design's body, not a gate blocker.
+
+**1. Ratifying that "Certificate" is discharged by the shared-cert SAN append, not
+a per-workload `Certificate`. Decided: ratify. Append two SANs
+(`davidsouther.com.127.0.0.1.nip.io`, `trips.davidsouther.com.127.0.0.1.nip.io`) to
+the single shared `agrippa-gateway-tls` cert; mint no per-workload cert.** Verified
+live: `grep -c "kind: Certificate" core/overlays/dev/gateway-cert.yaml` is exactly
+`1`, a single shared cert whose `dnsNames` carries five SANs today (`argocd`,
+`dashboard.davidsouther.com`, `auth`, `git.davidsouther.com`, `flagsmith`), neither
+workload host present. Every prior UI feature-step in this session (Auth/Keycloak,
+Forgejo, Flagsmith, Observability/Grafana) consumed Gateway TLS by appending one SAN
+to this same cert, never by minting its own `Certificate`; the shared Gateway's
+single `https` listener references only `agrippa-gateway-tls`, so a per-workload cert
+would be unreferenced and unused. Continuing the established, universal, working
+convention is the conservative default; a per-workload `Certificate` would be the
+**first** deviation from an otherwise-universal project convention and needs strong
+justification to introduce, which does not exist (it would be inert). The parent
+design's item-2 literal "a cert-manager Certificate per workload" wording predates
+the realized five-SAN shared-cert model, so this discharges it rather than
+contradicting intent. Reversible, in scope, not escalated.
+
+**2. `resume.Dockerfile`/`trips.Dockerfile` layout, where the nginx `/healthz` +
+clean-URL config lives, and one-vs-two nginx config. Decided: two per-workload
+Dockerfiles, nginx config written inline in the serving stage (a `RUN` heredoc,
+needing nothing extra in the build context), one shared base nginx config carrying
+the harmless-on-trips `/healthz` block.** As proposed. Two thin Dockerfiles avoid a
+shared-`Dockerfile` `--build-arg WORKLOAD=…` indirection for two genuinely distinct
+build contexts, and the inline heredoc keeps the authored config out of the
+untouched upstream submodule. The exact `-f`/context/heredoc spelling and the real
+`/blog` output shape are build-verified against a live `docker build` (§ Challenges),
+which is where any surprise surfaces. Reversible within `workloads/`, in scope.
+
+**3. The built image tags (`resume:dev`, `trips:dev`). Decided: as proposed.**
+Research requires a non-`:latest` explicit tag (else `imagePullPolicy` defaults to
+`Always` and `k3d image import` applies `:latest` name-normalization); `resume:dev`/
+`trips:dev` is the conventional dev tag string, pinned identically by the Deployments
+and the charts' `values.yaml`. Trivially reversible, in scope.
+
+**4. Readiness/liveness probe targets (`httpGet /healthz` for resume, `httpGet /`
+for trips). Decided: as proposed.** `resume` serves `/healthz` by design (parent
+decision 4), so it is the correct probe target; `trips` ships no `/healthz` (the
+gestalt probes only the personal site), so `/` is the only sensible target. This
+determines whether ArgoCD reports the Deployment Healthy, so it is surfaced rather
+than left implicit; exact timing is build-tuned. Reversible, in scope.
+
+**5. The Helm charts' internal shape (flat `values.yaml`; three templates
+`deployment`/`service`/`httproute`; `tests/*.yaml` asserting the image pin,
+`imagePullPolicy: Never`, the Service port, and the HTTPRoute's explicit `matches:`
+plus hostname). Decided: as proposed, following helm-unittest's own `DOCUMENT.md`.**
+No in-repo precedent exists (these are the first hand-authored charts, confirmed:
+`scripts/test-chart.sh` still guards on an absent top-level `charts/`), so the
+conservative default looks outward to the tool's own documented conventions and
+keeps the chart minimal and aligned with the live overlay's three objects and no
+`Certificate`. Matches `DEVELOPMENT.md`'s `charts/<chart>/tests/` layout. Reversible,
+in scope.
+
+**6. Workload namespaces (`resume`, `trips` vs one shared `workloads`). Decided:
+per-workload `resume` and `trips` namespaces.** Every sibling component in the tree
+owns its own namespace, and `ROUTING.md` plus the parent design isolate `trips` onto
+its own subdomain for two genuinely distinct deploy identities. Per-workload
+namespaces continue the universal per-component-owns-its-namespace convention and
+keep blast radius minimal; a single shared namespace would be a (reasonable but)
+unmotivated departure. The bare-namespace shape (name + sync-wave only, no
+ambient/injection label) is verified consistent with every sibling app namespace.
+Reversible, in scope.
+
+**7. The git-submodule auth assumption ("both repos public, no credentials").
+Decided: proceed with both submodules; correct the design's false premise and
+strengthen the ArgoCD-fetch mitigation. NOT escalated.** Live verification
+falsified the "both public" assumption: `resume` is genuinely public (git
+smart-HTTP `200`, `gh` `PUBLIC`), but `trips` is **private** (`gh` `isPrivate: true`,
+unauthenticated git smart-HTTP `401`). The parent design already recorded this
+correctly ("one public, one private"); only this feature-step's `research.md`/
+`research/public.md` and design body mislabeled both public, from David's
+authenticated `gh api` reads succeeding. The measured flow still holds: `git
+submodule add`/`update --init` for `trips` works on David's authenticated machine
+(his credential helper supplies the token non-interactively, verified live via `git
+ls-remote`), and David is the operator and the Closing Bell's human judge; `resume`
+needs no credentials. `.gitmodules` is correctly accounted for as a new committed
+file (§ Cross-step touches). This is not escalated: (a) reversible, (b) in scope,
+(c) the conservative default is determined (keep `trips` as a private submodule that
+works for the authenticated operator; do not require David to change a repo's
+visibility). Two body corrections were applied: § The git submodules now states
+`resume` public / `trips` private with the auth consequence, and the ArgoCD
+submodule-fetch failure mode is upgraded from "watch, do not pre-optimize" to
+"proactively disable submodule fetch on the `workloads` Application" because a
+private `trips` makes the fetch a determined `401`, not a mere reachability blip
+(the plain-YAML live render references no submodule content, so it is unaffected).
+An unauthenticated third-party clone would `401` on `trips`; that is a
+documentation-and-CI concern parked to the deferred CI/registry seams, not a blocker
+for this local, operator-run feature-step.
 
 ## Feature Test
 
