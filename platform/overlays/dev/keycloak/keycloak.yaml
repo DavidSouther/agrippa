@@ -1,0 +1,9 @@
+# Wave 0: the Keycloak CR, wired to the shared postgres Cluster over its
+# plain-HTTP listener (spec lands Step 3).
+apiVersion: k8s.keycloak.org/v2beta1
+kind: Keycloak
+metadata:
+  name: keycloak
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"

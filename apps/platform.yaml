@@ -6,6 +6,13 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "2"
+    # `syncOptions: ServerSideApply=true` (below) auto-enables ArgoCD's
+    # Structured Merge Diff strategy application-wide, which mispredicts
+    # webhook-defaulted CRD fields (Keycloak's two webhook-backed CRDs
+    # reproduce the same symptom apps/core.yaml and apps/storage.yaml
+    # document, argoproj/argo-cd#22151). Force Server-Side Diff (a real
+    # dry-run apply) so admission/defaulting participates correctly.
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: default
   source:
@@ -19,3 +26,10 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    # Keycloak's CRDs are large enough to overflow client-side apply's
+    # last-applied-configuration annotation, and SkipDryRunOnMissingResource
+    # lets CRs sync before their own CRDs are dry-run-validatable on the
+    # very first apply -- same seam as apps/core.yaml/apps/storage.yaml.
+    syncOptions:
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true
