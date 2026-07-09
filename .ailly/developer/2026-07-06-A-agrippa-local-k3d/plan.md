@@ -32,7 +32,7 @@ conftest/chainsaw/bats/mise — build to `DEVELOPMENT.md`, `ROUTING.md`, and
 - [x] Feature 6: Git hosting (Forgejo)                   Depends on: Feature 4. Parallel with: Feature 5, Feature 7, Feature 8; shared contract: storage class + DB naming
 - [x] Feature 7: Feature flags (Flagsmith)               Depends on: Feature 4. Parallel with: Feature 5, Feature 6, Feature 8; shared contract: storage class + DB naming
 - [x] Feature 8: Observability (LGTM + Alloy)            Depends on: Feature 4. Parallel with: Feature 5, Feature 6, Feature 7; shared contract: storage class
-- [ ] Feature 9: Workloads (resume + trips)              Depends on: Feature 3, Feature 5 (and Feature 7 where a workload uses feature flags)
+- [x] Feature 9: Workloads (resume + trips)              Depends on: Feature 3, Feature 5 (and Feature 7 where a workload uses feature flags)
 
 Nine feature-steps (Feature 0 through Feature 9) matching `design.md`'s roadmap
 items 1-9 plus the Step 0 prerequisite the design itself names. This is one more
