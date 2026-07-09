@@ -89,6 +89,22 @@ helmCharts:
       minio:
         persistence:
           storageClass: local-path
+      # rollout_operator.enabled defaults to true (a whole extra Deployment
+      # plus mutating/validating admission webhooks for coordinated
+      # zone-by-zone rollout/downscale). Confirmed live: with
+      # zoneAwareReplication disabled above, its webhooks still intercept
+      # every StatefulSet create/update in the observability namespace
+      # (namespaceSelector-scoped, not conditioned on the zone-aware
+      # annotations it would otherwise coordinate) -- and while the operator
+      # pod itself was still becoming Ready, ArgoCD's ServerSideDiff dry-run
+      # failed outright ("no endpoints available for service
+      # mimir-rollout-operator"), blocking comparison for the whole
+      # Application. Zone-by-zone coordination is meaningless without
+      # zone-aware replication, so the whole subchart (Chart.yaml's
+      # `condition: rollout_operator.enabled`) is disabled rather than
+      # patching around its webhook.
+      rollout_operator:
+        enabled: false
 # The bundled minio subchart's own generic post-install/post-upgrade Job
 # (buckets/users/policies/customCommands/svcaccts) -- not a `helm.sh/hook:
 # test` hook, so skipTests above doesn't remove it. helm template semantics
