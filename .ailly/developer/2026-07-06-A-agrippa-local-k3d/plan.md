@@ -28,10 +28,10 @@ conftest/chainsaw/bats/mise — build to `DEVELOPMENT.md`, `ROUTING.md`, and
 - [x] Feature 2: GitOps (ArgoCD)                         Depends on: Feature 1
 - [x] Feature 3: Networking (Istio + cert-manager)       Depends on: Feature 1; applied via Feature 2
 - [x] Feature 4: Storage (Postgres + Valkey)             Depends on: Feature 1, Feature 2
-- [ ] Feature 5: Auth (Keycloak)                         Depends on: Feature 4. Parallel with: Feature 6, Feature 7, Feature 8; shared contract: storage class + DB naming
+- [x] Feature 5: Auth (Keycloak)                         Depends on: Feature 4. Parallel with: Feature 6, Feature 7, Feature 8; shared contract: storage class + DB naming
 - [ ] Feature 6: Git hosting (Forgejo)                   Depends on: Feature 4. Parallel with: Feature 5, Feature 7, Feature 8; shared contract: storage class + DB naming
 - [ ] Feature 7: Feature flags (Flagsmith)               Depends on: Feature 4. Parallel with: Feature 5, Feature 6, Feature 8; shared contract: storage class + DB naming
-- [ ] Feature 8: Observability (LGTM + Alloy)            Depends on: Feature 4. Parallel with: Feature 5, Feature 6, Feature 7; shared contract: storage class
+- [x] Feature 8: Observability (LGTM + Alloy)            Depends on: Feature 4. Parallel with: Feature 5, Feature 6, Feature 7; shared contract: storage class
 - [ ] Feature 9: Workloads (resume + trips)              Depends on: Feature 3, Feature 5 (and Feature 7 where a workload uses feature flags)
 
 Nine feature-steps (Feature 0 through Feature 9) matching `design.md`'s roadmap
