@@ -9,3 +9,5 @@ resources:
   - namespace.yaml
   - ../../../../secrets/dev/platform/forgejo
   - forgejo-database.yaml
+  - chart/
+  - httproute.yaml
