@@ -59,11 +59,21 @@
 #
 # `resources:` scoped to a dev-appropriate footprint proactively (the same
 # precedent Auth's Keycloak-operator and Git-hosting's Forgejo builds both
-# applied), using this chart's own commented-out example values --
-# node headroom is ample, but an unbounded request-less container is still
-# a noisy-neighbor risk on this single-node dev cluster's growing footprint
-# (Istio, cert-manager, metallb, CNPG, Valkey, the full LGTM stack,
-# Keycloak, Forgejo, now Flagsmith).
+# applied) -- node headroom is ample, but an unbounded request-less
+# container is still a noisy-neighbor risk on this single-node dev
+# cluster's growing footprint (Istio, cert-manager, metallb, CNPG, Valkey,
+# the full LGTM stack, Keycloak, Forgejo, now Flagsmith).
+#
+# BUILD-TIME FINDING (caught live, not by static review): the chart's own
+# commented-out example (limits.memory: 500Mi) OOMKilled the api container
+# (exitCode 137) seconds after its first successful startup -- confirmed
+# via `kubectl -n flagsmith get pods` showing `lastState.terminated.reason:
+# OOMKilled` and the pod's steady-state usage (~245Mi) sitting well under
+# the limit, meaning the kill hit a transient startup spike (gunicorn
+# worker fan-out atop the migrate-db/bootstrap initContainers), not a
+# sustained leak. Raised to 1Gi -- the dev node has ample headroom (46%
+# memory allocated pre-fix) -- and re-verified stable (no further restarts,
+# repeated /health 200s) after the bump.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
@@ -89,7 +99,7 @@ helmCharts:
             cpu: 100m
             memory: 256Mi
           limits:
-            memory: 512Mi
+            memory: 1Gi
         secretKeyFromExistingSecret:
           enabled: true
           name: flagsmith-secret-key
