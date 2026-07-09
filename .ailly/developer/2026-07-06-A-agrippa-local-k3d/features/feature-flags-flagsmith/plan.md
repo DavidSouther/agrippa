@@ -10,7 +10,7 @@
 - [x] Step 1: Wave `-10` — the `flagsmith` namespace
 - [x] Step 2: Wave `-5` — the three sealed credentials and the `flagsmith` `Database` CR
 - [x] Step 3: Wave `0` — the Flagsmith Helm release
-- [ ] Step 4: Wave `5` — the `HTTPRoute` and the Gateway certificate append
+- [x] Step 4: Wave `5` — the `HTTPRoute` and the Gateway certificate append
 - [ ] Step 5: Full GREEN — the feature test and the regression sweep
 
 **Libraries & Skills (carried forward from `design.md`/`research.md`; load before each build step):**
