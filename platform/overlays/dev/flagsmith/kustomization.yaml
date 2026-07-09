@@ -10,4 +10,4 @@ resources:
   - ../../../../secrets/dev/platform/flagsmith
   - database.yaml
   - helm/
-  # httproute.yaml lands Step 4
+  - httproute.yaml
