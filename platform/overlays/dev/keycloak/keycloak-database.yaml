@@ -14,3 +14,8 @@ metadata:
   namespace: storage
   annotations:
     argocd.argoproj.io/sync-wave: "-5"
+spec:
+  name: keycloak
+  owner: keycloak
+  cluster:
+    name: postgres
