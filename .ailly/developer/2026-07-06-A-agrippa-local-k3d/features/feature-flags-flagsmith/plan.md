@@ -1,6 +1,6 @@
 # Implementation Plan: Feature flags (Flagsmith)
 
-*Draft 2026-07-08*
+*Reviewed 2026-07-08*
 
 **Feature test:** `tests/feature-flags.bats`
 **User story:** Given the bootstrapped `agrippa-dev` cluster (Features 1-6) with this Flagsmith content committed and reconciled by ArgoCD into the `platform` layer — the Flagsmith Helm release (`api` + `frontend`) in the `flagsmith` namespace, wired via `databaseExternal` to the shared CNPG `postgres` Cluster's own `flagsmith` database/role, its three KSOPS-sealed credentials, its `Database` CR, and its hand-authored `HTTPRoute` at `flagsmith.127.0.0.1.nip.io` — when an operator requests `https://flagsmith.127.0.0.1.nip.io/` and `.../health` through the k3d `:443` host port-map, then the admin UI is served through the shared Istio Gateway with a local-CA TLS cert, and the API `/health` endpoint returns 200, transitively proving the Django app is up and its connection to the shared Postgres database works.
@@ -511,3 +511,115 @@ run bats tests/feature-flags.bats
 run mise run test:push && mise run test:feature
 run bats tests/cluster-core.bats tests/gitops.bats tests/networking.bats tests/storage.bats tests/rotate-keys.bats
 ```
+
+## Resolved by the long-loop reviewer (2026-07-08)
+
+A separately dispatched long-loop reviewer read this plan cold, re-verified its
+load-bearing repo-state claims against the working tree and the running
+`k3d-agrippa-dev` cluster (**read only** — nothing was applied or mutated), checked
+transcription fidelity against the cleared `design.md` in this folder, and researched
+the one flagged self-applied correction (the `Database` CR wave move) against the
+actual upstream Flagsmith Helm chart. Each item below was decided to the conservative,
+reversible default; no escalation trigger (irreversible, out of recorded scope, or
+underdetermined) fired, so this plan's draft gate is cleared (marker now
+`*Reviewed 2026-07-08*`).
+
+**1. Transcription fidelity against the cleared `design.md`. Decided: faithful; carried
+through unchanged except the one flagged, justified wave deviation (item 3).** Every
+load-bearing artifact the design fixed transcribes exactly into this plan: the three
+sealed credentials (`flagsmith-db` basic-auth in `storage`, `flagsmith-database-url`
+Opaque `DATABASE_URL`, `flagsmith-secret-key` Opaque `SECRET_KEY`) with their exact
+paths and keys; the DSN `postgres://flagsmith:<pw>@postgres-rw.storage.svc:5432/flagsmith`
+composed from the same password as `flagsmith-db`; the Helm `valuesInline` block
+(`postgresql.enabled: false`; `databaseExternal.enabled: true` +
+`urlFromExistingSecret{name: flagsmith-database-url, key: DATABASE_URL}`;
+`api.secretKeyFromExistingSecret{name: flagsmith-secret-key, key: SECRET_KEY}`;
+`api.bootstrap{enabled: true, adminEmail: admin@agrippa.local, org/project agrippa}`;
+`frontend.enabled: true`; `sse.enabled: false`); the chart coordinates
+(`https://flagsmith.github.io/flagsmith-charts/`, `flagsmith`, `0.82.0`/app `2.238.0`
+research-date reference, pin-don't-float); the two-rule `HTTPRoute` (`/health`→API,
+`/`→frontend, parentRefs `agrippa-gateway`/`istio-ingress`/`https`, host
+`flagsmith.127.0.0.1.nip.io`); the two shared-list appends; and the `Database` CR spec
+`{name, owner: flagsmith, cluster: {name: postgres}}` including the `spec.name`
+build-time finding correctly carried from `storage-postgres-valkey` (git `8e7b362`).
+The build-time deferrals (chart version pin, Service names/ports, exact health path,
+allowed-hosts, the kustomize `helmCharts` namespace-stamping regression) are legitimate
+`research:public` build-phase items, matching the design and both completed siblings —
+not plan-gate decisions, correctly left open.
+
+**2. Repo-state claims re-verified live. Decided: all correct as recorded, with one
+characterization correction to the `.sops.yaml` note.** Confirmed against the working
+tree and the live cluster: `apps/platform.yaml` carries `syncPolicy.automated` only —
+**no** seam yet (no `syncOptions`, no `compare-options` annotation); no Keycloak/Forgejo
+sibling has landed it, so this plan's Step 0 clean pre-image holds and its Step 0 remains
+the shared-seam adder. `platform/overlays/dev/kustomization.yaml` is `resources:
+[argocd.yaml]` only (no sibling `flagsmith/`/`keycloak/`/`forgejo/` subdir), and the
+`platform` Application is live `Synced/Healthy` on that content. `storage/overlays/dev/
+postgres-cluster.yaml`'s `managed.roles[]` holds only `smoke` (the plan appends
+`flagsmith` cleanly). `core/overlays/dev/gateway-cert.yaml`'s `dnsNames` holds only
+`argocd.127.0.0.1.nip.io` (no sibling host appended yet; the plan's append is clean).
+`scripts/test-feature.sh` already excludes `feature-flags.bats` in its probe-suite
+`case` list (alongside the sibling exclusions, all landed at design time). **Correction
+to Step 2's `.sops.yaml` edge-case wording:** the recipient
+`age1e8wr0f85w0yfqgxc3pc6426ghlu5xt069znn5yuwrtwz30u23quqjcx6vc` is, per `.sops.yaml`'s
+own header comment, an explicitly-labeled **PLACEHOLDER** (the real dev key is to be
+minted via `age-keygen` and custodied in Bitwarden), **not** a "real recipient already
+fixed by `storage-postgres-valkey`'s Step 0." That characterization is inaccurate.
+However, the plan's *operative* claim is correct and unchanged: this placeholder is the
+live-operative key — the committed `storage` secrets (`smoke.enc.yaml`,
+`valkey/smoke.enc.yaml`) are encrypted to exactly this recipient and decrypt live (the
+in-cluster `sops-age` Secret holds the matching private half; `smoke-db` reads back as
+`kubernetes.io/basic-auth`), so flagsmith's three secrets sealed against the unchanged
+`^secrets/dev/.*$` rule will round-trip identically, and **no `.sops.yaml` edit is
+needed in this feature-step**. Replacing the placeholder with a real Bitwarden-custodied
+key is a project-wide secrets-custody task outside this artifact's recorded scope; the
+plan correctly does not touch `.sops.yaml`. Reversible, in-scope, determined — no
+escalation; the build should treat the KSOPS round-trip check (Step 2) as gating exactly
+as written, just without the "already fixed / real" framing.
+
+**3. The `flagsmith` `Database` CR wave placement (design's wave `5` vs the plan's
+self-applied move to wave `-5`). Decided: wave `-5` is correct — the plan's correction
+is right, and more strongly justified than the plan itself argues.** Researched against
+the upstream `Flagsmith/flagsmith-charts` `deployment-api.yaml` and `values.yaml`
+(`research:public`). The api Deployment gates on the `flagsmith` database physically
+existing via **two init-time mechanisms**, not merely the "plausible" readiness-probe
+hypothesis the plan hedged on: (a) `api.enableMigrateDbInitContainer` defaults **`true`**,
+so the api pod always ships a `migrate` initContainer that runs Django migrations
+against the DSN's `/flagsmith` database — which fails to connect if that database does
+not exist; and (b) this plan sets `api.bootstrap.enabled: true`, which adds a second
+initContainer running `python manage.py waitfordb && python manage.py bootstrap`, where
+`waitfordb` blocks (logging "Database not yet ready for connections") until the
+configured database is reachable. Either initContainer alone prevents the pod from ever
+completing init — so it can never reach `Ready`, independent of the readiness probe
+(whose default path is in fact `/health/readiness/`, a `django-health-check` DB-gated
+endpoint, confirming the probe would gate too). Therefore at the design's wave `5`
+(Database CR **after** the wave-`0` release) the sequence is a genuine, self-perpetuating
+**deadlock**: the wave-`0` Deployment never goes Healthy → ArgoCD never advances its
+sync past wave `0` → the wave-`5` `Database` CR that would `CREATE DATABASE flagsmith`
+is never applied → the init gate never clears, on every re-sync (git content is fixed).
+Moving the CR to wave `-5` (before the release) breaks the cycle cleanly: CNPG (already
+live from the `storage` layer's sync-wave-1 Application) creates the database first; in
+the async-race case the initContainers' own retry (`waitfordb`, plus Django's
+connection retry) self-heals in seconds rather than deadlocking. Wave `-5` is the right
+depth — no earlier is needed, because the `Database` CR's only dependencies (the CNPG
+operator, the shared `postgres` Cluster, and the `flagsmith` role) are all live from
+`storage` (sync-wave 1) before `platform` (sync-wave 2) even starts, and none live in
+this component's own `-10`/`0` waves. The original design wave `5` was safe only for
+`storage`'s `smoke` fixture Database (nothing consumes it with a DB-gated init); it is
+wrong for this DB-consuming app. Reversible (a one-line annotation edit), in-scope
+(no object name/namespace/spec changes), determined — no escalation.
+
+*Sibling cross-check (informational; this item decided on its own merits above).* The
+same DB-wave question is live in the concurrent Auth (Keycloak) and Git-hosting
+(Forgejo) plans, and the siblings landed **different** verdicts: `storage`'s own
+`smoke-database.yaml` precedent sits at wave `5`; the Keycloak plan **keeps** its
+`Database` CR at wave `5` and defers the resequencing to a *build-time* check ("if it
+deadlocks, move to `-5`"); the Forgejo plan likewise stubs its `Database` at wave `5`.
+Only this Flagsmith plan resequences proactively at plan time. The divergence is
+explained by the operand, not by disagreement on principle: Flagsmith's chart pins the
+deadlock to a near-certainty at plan time via the always-on `migrate` initContainer plus
+the plan-enabled `waitfordb` bootstrap initContainer, whereas Keycloak/Forgejo left the
+equivalent operator/chart init behavior as a genuine build-time unknown. A build-time
+finding on any sibling that its app is likewise DB-init-gated should pull that sibling's
+`Database` CR to `-5` the same way; that is a note for those reviewers, not a change to
+this plan.

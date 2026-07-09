@@ -1,6 +1,6 @@
 # Implementation Plan: Git hosting (Forgejo server, Postgres-backed)
 
-*Draft 2026-07-08*
+*Reviewed 2026-07-09*
 
 > Feature-step plan (feature-loop shape) inside the Project-Shape session
 > `2026-07-06-A-agrippa-local-k3d`. This is **Feature 6: Git hosting
@@ -11,9 +11,9 @@
 > — this session does not clear it itself. The step decomposition follows the
 > forward path fixed by the two most-recently-completed sibling plans,
 > `storage-postgres-valkey/plan.md` and `networking-istio/plan.md`, closely
-> enough (four intra-component sync-waves + a Step 0 layout step + a final
+> enough (three intra-component sync-waves + a Step 0 layout step + a final
 > proof-and-regression step) that the forward-backward method's map-file
-> mechanism was not needed — the six-step shape was directly evident from
+> mechanism was not needed — the five-step shape was directly evident from
 > those two precedents plus the cleared design's own intra-`forgejo`
 > sync-wave scheme.
 
@@ -35,10 +35,9 @@ runner/Actions/CI assertion** (deferred).
 **Steps:**
 - [ ] Step 0: API surface area (file layout, `apps/platform.yaml` sync seam)
 - [ ] Step 1: Wave `-10` — the `forgejo` Namespace, wired into the shared `platform` overlay
-- [ ] Step 2: Wave `-5` — sealing the admin + DB credentials, and the storage `managed.roles[]` append
+- [ ] Step 2: Wave `-5` — sealing the admin + DB credentials, the storage `managed.roles[]` append, and the `forgejo` `Database` CR
 - [ ] Step 3: Wave `0` — the Forgejo chart, its `HTTPRoute`, and the Gateway-cert SAN append
-- [ ] Step 4: Wave `5` — the `forgejo` `Database` CR
-- [ ] Step 5: Full GREEN — the authenticated admin + push proof, and the regression sweep
+- [ ] Step 4: Full GREEN — the authenticated admin + push proof, and the regression sweep
 
 **Libraries & Skills (carried forward from `design.md`/`research.md`; load before each build step):**
 
@@ -131,9 +130,11 @@ controller-defaulted-field permanent-`OutOfSync` symptom (argoproj/argo-cd
 directory layout**, fixing every file and object name the cleared `design.md`
 Specification already resolved (including its reviewer-resolved Open
 Artifact Decisions 1-5). **One plan-level refinement on the design's proposed
-flat layout:** the design's `forgejo/` listing mixes four different
-sync-waves (namespace `-10`, secrets `-5` via a referenced sub-kustomization,
-chart+`HTTPRoute` `0`, `Database` `5`) inside one component subdirectory —
+flat layout:** the design's `forgejo/` listing mixes three different
+sync-waves (namespace `-10`, secrets and the `Database` CR `-5` — the
+secrets via a referenced sub-kustomization, the `Database` CR via its own
+inline annotation — and chart+`HTTPRoute` `0`) inside one component
+subdirectory —
 under-specified in the design as "normal artifact authoring" (research item
 4). Mirroring how Storage resolved the identical shape (`cnpg-operator/` and
 `valkey/` are each their own nested kustomization scoped to *one* wave via
@@ -157,7 +158,7 @@ platform/overlays/dev/forgejo/
 ├── kustomization.yaml        # this step: resources: [namespace.yaml] only
 ├── namespace.yaml            # Namespace forgejo (full content now; wave -10)
 ├── httproute.yaml            # wave 0; HTTPRoute forgejo name-only stub (ns forgejo; spec lands Step 3)
-├── forgejo-database.yaml     # wave 5; Database forgejo name-only stub (ns storage; spec lands Step 4)
+├── forgejo-database.yaml     # wave -5; Database forgejo name-only stub (ns storage; spec lands Step 2)
 └── chart/
     └── kustomization.yaml    # wave 0; helmCharts: [] (Forgejo chart lands Step 3)
 
@@ -197,7 +198,7 @@ metadata:
   name: forgejo
   namespace: storage
   annotations:
-    argocd.argoproj.io/sync-wave: "5"
+    argocd.argoproj.io/sync-wave: "-5"
 ```
 
 ```yaml
@@ -220,7 +221,7 @@ generators: []   # secret-generator.yaml (kind: ksops) lands Step 2
 
 This fixes: the `apps/platform.yaml` sync seam, the directory layout, every
 shared-contract object name (`forgejo`, `forgejo-admin`, `forgejo-db`), and
-the four-tier sync-wave scheme (`-10`/`-5`/`0`/`5`) as constants every
+the three-tier sync-wave scheme (`-10`/`-5`/`0`) as constants every
 remaining step reuses. `tests/git-hosting.bats` is a `design.md` artifact and
 already exists (RED baseline: `platform` trivially Synced/Healthy on
 `argocd.yaml`-only content, failing from THEN 1 onward). Step 0 does not
@@ -310,13 +311,17 @@ platform/overlays/dev/forgejo/kustomization.yaml:
     - namespace.yaml
 ```
 
-## Step 2: Wave `-5` — sealing the admin + DB credentials, and the storage `managed.roles[]` append
+## Step 2: Wave `-5` — sealing the admin + DB credentials, the storage `managed.roles[]` append, and the `forgejo` `Database` CR
 
 **Enables:** no feature-test assertion flips directly yet (nothing consumes
-these Secrets until Step 3's chart references them), but this is the
-load-bearing prerequisite for THEN 3 (the authenticated admin call) and THEN
-4 (the repo push, which needs the Postgres-backed user store) — and it is the
-storage-side half of the design's cross-namespace DB credential wrinkle.
+these Secrets or the database until Step 3's chart connects to them), but
+this is the load-bearing prerequisite for THEN 3 (the authenticated admin
+call) and THEN 4 (the repo push, which needs the Postgres-backed user store)
+— the storage-side half of the design's cross-namespace DB credential
+wrinkle, plus the declarative `forgejo` `Database` CR itself: the per-app
+database the shared `postgres` Cluster's `forgejo` role (sealed and appended
+below, in this same step) needs before Forgejo's user/repo tables can be
+created.
 
 Seal three credentials using the identical discipline Storage's `smoke-db`/
 `smoke-valkey` fixtures already proved (generate in memory, encrypt
@@ -347,6 +352,24 @@ slug from the live `smoke` entry. This is a `storage`-layer touch (a
 different ArgoCD Application than `platform`), landing here because it is
 tightly coupled to sealing `db-storage.enc.yaml` in the same step.
 
+Fill `forgejo-database.yaml`'s spec: `name: forgejo`, `owner: forgejo`,
+`cluster: {name: postgres}` — the exact live `smoke-database.yaml` shape,
+slug changed (including the required `spec.name` literal DB name, Storage's
+own build-discovered CRD field, already reflected here). Wire it into
+`platform/overlays/dev/forgejo/kustomization.yaml`'s `resources:` list at
+wave `-5`, alongside the sealed Secrets and ahead of the chart (wave `0`,
+Step 3) — its only real prerequisites are the CNPG operator and the
+`forgejo` role (the `managed.roles[]` append just above, on the already-live
+shared Cluster), not the chart or anything later in this component.
+**Corrected placement:** the design originally scheduled this CR at wave
+`5`, after the chart; a plan-gate reviewer found that deadlocks the ArgoCD
+sync (the wave-`0` Forgejo Deployment crash-loops without a database to
+connect to, so it never reaches Healthy, which permanently blocks the later
+wave that would create that database), and the coordinator corrected
+`design.md` to place it here at wave `-5` instead (see `design.md`'s
+"Correction by the coordinator (2026-07-09)"; also this plan's own §
+Resolved by the long-loop reviewer, item 4, below).
+
 **Tests**
 
 ```bash
@@ -366,6 +389,11 @@ test "the forgejo credentials round-trip through KSOPS; the storage role append 
   assert output == "forgejo-db"
   run mise run test:static
   assert status == 0                               # conftest sees secrets/, still passes
+
+test "the forgejo Database CR reconciles":
+  run kubectl --context k3d-agrippa-dev -n storage get database.postgresql.cnpg.io forgejo \
+    -o jsonpath='{.status.applied}'
+  assert output == "true"
 ```
 
 - Edge case: both `db-storage.enc.yaml` and `db-forgejo.enc.yaml` must be
@@ -394,6 +422,24 @@ test "the forgejo credentials round-trip through KSOPS; the storage role append 
 - Edge case: appending to `storage/overlays/dev/postgres-cluster.yaml`'s
   `managed.roles[]` must not disturb the live `smoke` entry — a pure list
   append, not a replace.
+- Edge case: `owner: forgejo` must resolve to a role that already exists
+  (this step's own `managed.roles[]` append, above) — CNPG errors on
+  `CREATE DATABASE ... OWNER forgejo` if the role isn't there yet. The role
+  append and the `Database` CR both land at wave `-5`, but they are two
+  different ArgoCD Applications (`storage` and `platform`) syncing
+  independently, so same-wave numbering alone does not guarantee ordering
+  between them — verify live rather than trust the wave annotation alone.
+- Edge case: confirm the exact CRD field spellings (`spec.name`,
+  `spec.owner`, `spec.cluster.name`) against the pinned CNPG version at
+  build — Storage's own build-time correction (the live CRD requires
+  `spec.name` in addition to `owner`/`cluster.name`) is already reflected
+  here, but re-verify against whatever CNPG version is live by this build.
+- Edge case: this `Database` CR lives in `platform/overlays/dev/forgejo/`
+  (the `platform` Application's own subtree) but targets `metadata.
+  namespace: storage` — confirm the `platform` Application can create a
+  resource into a namespace outside its own `destination.namespace` default
+  (the design's own cited precedent: the `storage` Application already
+  creates resources into both `cnpg-system` and `storage`).
 
 **Implementation Outline**
 
@@ -437,6 +483,20 @@ files:
   - db-forgejo.enc.yaml
 ```
 
+```yaml
+# platform/overlays/dev/forgejo/forgejo-database.yaml (filled)
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: forgejo
+  namespace: storage
+  annotations: {argocd.argoproj.io/sync-wave: "-5"}
+spec:
+  name: forgejo
+  owner: forgejo
+  cluster: {name: postgres}
+```
+
 ```text
 secrets/dev/platform/forgejo/kustomization.yaml:
   generators: [secret-generator.yaml]
@@ -445,6 +505,7 @@ platform/overlays/dev/forgejo/kustomization.yaml:
   resources:
     - namespace.yaml
     - ../../../../secrets/dev/platform/forgejo
+    - forgejo-database.yaml
 
 storage/overlays/dev/postgres-cluster.yaml:
   spec.managed.roles:
@@ -513,8 +574,10 @@ test "the Forgejo chart and HTTPRoute reconcile; the API is reachable over local
   `helm.sh/hook` test Pod the way Valkey's did (design's own flagged
   Challenge) — add `skipTests: true` if it does.
 - Edge case: the `forgejo` pod must not start (or must crash-loop cleanly,
-  not silently misconfigure) before `forgejo-db`/`forgejo-admin` exist —
-  Step 2's wave `-5` ordering should guarantee this; verify live rather than
+  not silently misconfigure) before `forgejo-db`/`forgejo-admin` exist and
+  the `forgejo` database itself has been created — Step 2's wave `-5`
+  ordering (the sealed Secrets and the `Database` CR both land there, ahead
+  of this wave-`0` chart) should guarantee this; verify live rather than
   trust the wave annotation alone.
 - Edge case: verify `git.davidsouther.com.127.0.0.1.nip.io` is the only new
   entry appended to `gateway-cert.yaml`'s `dnsNames` — the existing
@@ -588,87 +651,22 @@ platform/overlays/dev/forgejo/kustomization.yaml:
   resources:
     - namespace.yaml
     - ../../../../secrets/dev/platform/forgejo
-    - chart/
-    - httproute.yaml
-```
-
-## Step 4: Wave `5` — the `forgejo` `Database` CR
-
-**Enables:** the storage-provisioning half of THEN 3/THEN 4 (a real
-Postgres-backed user store and repo-metadata store) — the declarative
-per-app database the shared `postgres` Cluster's `forgejo` role (Step 2)
-needs before Forgejo's user/repo tables can be created.
-
-Fill `forgejo-database.yaml`'s spec: `name: forgejo`, `owner: forgejo`,
-`cluster: {name: postgres}` — the exact live `smoke-database.yaml` shape,
-slug changed (including the required `spec.name` literal DB name, Storage's
-own build-discovered CRD field, already reflected here). Wire it into
-`platform/overlays/dev/forgejo/kustomization.yaml`'s `resources:` list at
-wave `5`, after the chart (wave `0`) and the `forgejo` role (Step 2, already
-live on the shared Cluster) exist.
-
-**Tests**
-
-```bash
-test "the forgejo Database CR reconciles":
-  run kubectl --context k3d-agrippa-dev -n storage get database.postgresql.cnpg.io forgejo \
-    -o jsonpath='{.status.applied}'
-  assert output == "true"
-```
-
-- Edge case: `owner: forgejo` must resolve to a role that already exists
-  (Step 2's `managed.roles[]` entry) — CNPG errors on `CREATE DATABASE ...
-  OWNER forgejo` if the role isn't there yet; sync-wave ordering should
-  prevent this, but verify live rather than trust the wave annotation alone.
-- Edge case: confirm the exact CRD field spellings (`spec.name`,
-  `spec.owner`, `spec.cluster.name`) against the pinned CNPG version at
-  build — Storage's own build-time correction (the live CRD requires
-  `spec.name` in addition to `owner`/`cluster.name`) is already reflected
-  here, but re-verify against whatever CNPG version is live by this build.
-- Edge case: this `Database` CR lives in `platform/overlays/dev/forgejo/`
-  (the `platform` Application's own subtree) but targets `metadata.
-  namespace: storage` — confirm the `platform` Application can create a
-  resource into a namespace outside its own `destination.namespace` default
-  (the design's own cited precedent: the `storage` Application already
-  creates resources into both `cnpg-system` and `storage`).
-
-**Implementation Outline**
-
-```yaml
-# platform/overlays/dev/forgejo/forgejo-database.yaml (filled)
-apiVersion: postgresql.cnpg.io/v1
-kind: Database
-metadata:
-  name: forgejo
-  namespace: storage
-  annotations: {argocd.argoproj.io/sync-wave: "5"}
-spec:
-  name: forgejo
-  owner: forgejo
-  cluster: {name: postgres}
-```
-
-```text
-platform/overlays/dev/forgejo/kustomization.yaml:
-  resources:
-    - namespace.yaml
-    - ../../../../secrets/dev/platform/forgejo
-    - chart/
-    - httproute.yaml
     - forgejo-database.yaml
+    - chart/
+    - httproute.yaml
 ```
 
-## Step 5: Full GREEN — the authenticated admin + push proof, and the regression sweep
+## Step 4: Full GREEN — the authenticated admin + push proof, and the regression sweep
 
 **Enables:** THEN 3 (an authenticated `GET /api/v1/user` call with the
 sealed admin credential succeeds) and THEN 4 (create → clone → push →
 serve-back a repository) — the two assertions that prove the whole path
-end-to-end. No new manifests: Steps 1-4 already wired the chart, its
+end-to-end. No new manifests: Steps 1-3 already wired the chart, its
 DB-backed user store, and the `HTTPRoute`, so this step is proof-and-
 regression, not new substrate — mirroring both siblings' final step.
 
 Run `bats tests/git-hosting.bats` against the fully reconciled `platform`
-layer. If build-time verification (Steps 2-4's own recorded edge cases)
+layer. If build-time verification (Steps 2-3's own recorded edge cases)
 found any Forgejo API path, admin-Secret key name, or chart Service/port
 spelling diverges from what the suite assumes, correct the test's constants
 here — a test-definition correction inherited from build-time
@@ -706,7 +704,7 @@ test "no regression to earlier harness":
   against the live server, not just the test's own logic.
 - Edge case: `mise run test:static`'s kubeconform/conftest pass does not
   walk `platform/` (only `apps/`, `charts/*/rendered/`, and `secrets/`) — do
-  not assume `test:push` exercises Steps 1-4's Forgejo/CNPG/HTTPRoute YAML;
+  not assume `test:push` exercises Steps 1-3's Forgejo/CNPG/HTTPRoute YAML;
   ArgoCD's own live reconcile and this bats suite are the only validators of
   that content (both siblings' own final-step note, reused).
 - Edge case: `tests/rotate-keys.bats` is recorded as pre-existing-failing,
@@ -725,3 +723,170 @@ run bats tests/git-hosting.bats
 run mise run test:push && mise run test:feature
 run bats tests/cluster-core.bats tests/gitops.bats tests/networking.bats tests/storage.bats tests/rotate-keys.bats
 ```
+
+## Resolved by the long-loop reviewer (2026-07-08)
+
+This is a paper plan against the cleared feature `design.md`; it has not been
+built. A separately dispatched long-loop reviewer read it cold and, per the
+completed siblings' precedent, checked: (1) transcription fidelity against the
+cleared `design.md` (no re-litigating design decisions), (2) the plan's
+repo-state claims against the actually-committed files and the live
+`k3d-agrippa-dev` cluster (read-only), (3) the plan's own net-new refinement
+(the wave-scoped `chart/` sub-kustomization), and (4) the `forgejo` `Database`
+CR's wave placement for an ordering-vs-dependency defect. Items 1-3 cleared
+outright. **Item 4 was escalated: the originally transcribed wave scheme
+deadlocked the ArgoCD sync, and the fix required revisiting a cleared design
+decision — outside a plan-gate reviewer's own transcribe-faithfully remit, so
+the reviewer correctly declined to decide it unilaterally.** The coordinator
+resolved it directly: `design.md` § Intra-`forgejo` sync-wave scheme is
+corrected (see its "Correction by the coordinator (2026-07-09)" subsection) to
+move the `forgejo` `Database` CR from wave `5` to wave `-5`, and this plan is
+updated to match — the `Database` CR's creation now lands in Step 2 (wave
+`-5`, alongside the sealed credentials and the storage `managed.roles[]`
+append), and the standalone step that used to hold it is removed, with every
+downstream step renumbered. Item 4 below is accordingly re-recorded as
+**Decided**, not escalated, and **the draft gate clears** — the marker is
+updated to `*Reviewed 2026-07-09*`. The working tree and cluster were left
+exactly as found by the original review; this edit is paper-only.
+
+**1. Transcription fidelity against the cleared `design.md`; no runner/Actions/CI
+component anywhere. Decided: faithful — no change needed.** Every step transcribes
+the design's § Specification: the `apps/platform.yaml` sync-seam pair (Step 0),
+the `platform/overlays/dev/forgejo/` + `secrets/dev/platform/forgejo/` layout and
+the three-tier `-10/-5/0` wave scheme (Steps 0-3), the two sealed credentials
+plus the storage `managed.roles[]` append and the `forgejo` `Database` CR
+(Step 2), the chart `valuesInline` / `HTTPRoute` / `dnsNames` SAN append
+(Step 3), and the proof-and-regression sweep (Step 4). forgejo-runner/Actions
+appears only in the carried-forward deferral framing; no step introduces a
+runner Deployment, a
+registration secret, or any Actions/CI assertion, and the feature test explicitly
+asserts "no runner/Actions/CI." (The `mise run test:push` / `test:feature`
+regression calls are the project's own CI harness, not a Forgejo Actions runner.)
+
+**2. Repo-state claims verified live (read-only). Decided: accurate — no change
+needed.** `apps/platform.yaml` carries `syncPolicy.automated` only (no
+`syncOptions`, no `compare-options`), so the shared seam has not landed — and no
+sibling has raced it in: `platform/overlays/dev/` is still `resources:
+[argocd.yaml]` with no `forgejo/`, `keycloak/`, or `flagsmith/` subdir, and
+`secrets/dev/platform/` does not exist yet. `platform/overlays/dev/
+kustomization.yaml` is exactly `resources: [argocd.yaml]`.
+`storage/overlays/dev/postgres-cluster.yaml`'s `managed.roles[]` holds only
+`{name: smoke, login: true, passwordSecret: {name: smoke-db}}`, matching the
+append shape Step 2 mirrors. `core/overlays/dev/gateway-cert.yaml`'s `dnsNames` is
+`[argocd.127.0.0.1.nip.io]` only, so Step 3's one-line SAN append is specified
+correctly. `scripts/test-feature.sh` already carries `git-hosting.bats` in its
+probe-suite exclusion `case` list, so Step 4 need only confirm it, as stated.
+**`.sops.yaml`'s `^secrets/dev/.*$` recipient is a real, functional key, not a
+placeholder:** its value
+`age1e8wr0f85w0yfqgxc3pc6426ghlu5xt069znn5yuwrtwz30u23quqjcx6vc` is byte-identical
+to the `recipient:` embedded in the already-committed, live-decrypting
+`secrets/dev/storage/postgres/smoke.enc.yaml`, so the design's "already a real
+recipient, fixed by Storage" holds and this plan's sealing will decrypt
+in-cluster. (Caveat, not a plan defect: `.sops.yaml`'s own leading comment still
+reads "PLACEHOLDER recipient / Replace the placeholder below … once it exists" —
+stale text carried over from Storage's Step 0 pre-image; the value beneath it is
+the real key. Worth correcting the comment out-of-band; it does not affect this
+plan.)
+
+**3. The plan's refinement splitting the design's flat `forgejo/` into a
+wave-scoped `chart/` sub-kustomization (mirroring Storage's `valkey/`). Decided:
+internally consistent and faithful — no change needed.** Every authored file's
+sync-wave annotation matches the step that lands it: `namespace.yaml` wave `-10`
+(Step 1), the `secrets/dev/platform/forgejo` kustomization `commonAnnotations`
+wave `-5` (Step 2), `forgejo-database.yaml` inline wave `-5` (Step 2, folded in
+alongside the sealed credentials — see item 4), `chart/kustomization.yaml`
+`commonAnnotations` wave `0` (Step 3), `httproute.yaml` inline wave `0`
+(Step 3) — one-for-one with the Step table. The `chart/`
+sub-kustomization (`commonAnnotations: {sync-wave: "0"}` + `helmCharts:`) is a
+faithful mirror of Storage's realized `storage/overlays/dev/valkey/
+kustomization.yaml`, and the refinement changes structure, not behavior: it
+realizes exactly the design's own stated rule ("`commonAnnotations` on the nested
+Helm/secrets kustomizations, inline on authored CRs"), and it is strictly safer
+than the design's flat-`forgejo/` diagram — a single `commonAnnotations` on one
+flat kustomization carrying the wave-`0` chart *alongside* the wave-`-10`/`-5`
+authored CRs would have to clobber or collide with those CRs' own inline waves.
+A legitimate plan-level improvement, not a silent divergence. (It is orthogonal
+to, and unaffected by, the wave-*number* correction recorded in item 4.)
+
+**4. The `forgejo` `Database` CR wave placement versus the Forgejo chart
+(Step 3, wave `0`). Decided: corrected — the `Database` CR now lands in
+Step 2 at wave `-5`, before the chart, closing the deadlock.** The reviewer
+found that the originally transcribed wave scheme (`Database` CR at wave
+`5`, after the wave-`0` chart) deadlocked the ArgoCD sync — the Forgejo
+Deployment hard-depends on a database that a later, health-gated wave was
+responsible for creating, so neither could ever complete. Verified:
+Forgejo/Gitea blocks on its database connection at startup — `InitDBEngine`
+retries `DB_RETRIES` (default 10) times at `DB_RETRY_BACKOFF` (default 3s)
+intervals (≈30s), then `log.Fatal`s and exits (CrashLoopBackOff); it never
+binds the HTTP listener or passes its readiness probe until the connection
+succeeds (go-gitea/gitea#27079; Gitea config cheat-sheet `[database]`).
+Connecting to a database that does not exist is itself a connection failure,
+so a Forgejo pod pointed at the not-yet-created `forgejo` database
+crash-loops. Meanwhile ArgoCD applies sync-waves in ascending order and
+waits for every resource in a wave to be **Healthy** before applying the
+next; a crash-looping Deployment stays Progressing/Degraded, so the old wave
+`5` — the `Database` CR that alone creates database `forgejo` — would never
+have executed. The database was thus permanently gated behind the very
+Deployment that requires it: a circular deadlock the sync could not have
+converged out of (selfHeal re-attempts always restart at the lowest
+incomplete wave, `0`, and stick again). CNPG does not auto-create the
+database (its `managed.roles[]` append creates only the *role*; the
+`Database` CR is the sole creator, exactly as Storage's `smoke` proved), so
+there was no escape path within the original plan. This was not the
+graceful-retry exemption the review question hypothesized: Forgejo's ~30s
+retry window cannot bridge a database whose creation is strictly wave-gated
+behind the pod's own health, and even an unbounded retry would not, because
+the old wave `5` would never run. Storage's own `smoke` `Database` (also
+wave `5`) is safe only because storage has **no consumer Deployment** that
+connects to the smoke database before wave `5`; Forgejo is the first
+platform feature with a wave-`0` consumer of its own database, so it was
+the first to hit this. The design was *internally contradictory* on exactly
+this point: its § Failure modes prescribed "the intra-`forgejo` sync-wave
+ordering (secret **and DB** before the Deployment)" as the mitigation, which
+its own original § Intra-`forgejo` sync-wave scheme (Database at wave `5`,
+after the wave-`0` chart) violated; the plan had faithfully transcribed the
+wave-scheme half.
+
+Per the long-loop escalation rule, the reviewer correctly declined to decide
+this unilaterally — fixing it meant moving the `forgejo` `Database` CR to a
+wave *before* the chart, which re-assigns a wave the cleared `design.md` §
+scheme fixed explicitly, outside a plan-gate reviewer's own
+transcribe-faithfully remit — and escalated instead of deciding. **The
+coordinator has since resolved it.** `design.md` § Intra-`forgejo` sync-wave
+scheme is corrected (see its "Correction by the coordinator (2026-07-09)"
+subsection) to place the `forgejo` `Database` CR at wave `-5`, alongside the
+two sealed Secrets: its only real prerequisites — the CNPG operator and the
+`forgejo` role — are both cross-Application in the already-live `storage`
+layer, not in this Application's own later waves, so an earlier wave loses
+nothing. This plan is updated to match: the `Database` CR's file, spec, and
+wave annotation are folded into Step 2 (wave `-5`, alongside the sealed
+credentials and the storage `managed.roles[]` append), the standalone step
+that used to hold it is removed, and Step 3's own resources list and
+build-verification edge case are updated to reflect that the database
+already exists by the time the wave-`0` chart lands. With the database
+created before the chart's wave-`0` Deployment ever starts, Forgejo's pod
+connects to an already-existing database on first boot — no crash-loop, no
+deadlock.
+
+**Reviewer verification (2026-07-08).** Checked live, read-only, against the
+committed tree and the `k3d-agrippa-dev` cluster context: `apps/platform.yaml`
+(no seam), `platform/overlays/dev/kustomization.yaml` (`resources: [argocd.yaml]`),
+`platform/overlays/dev/` and `secrets/dev/platform/` (no sibling landing yet),
+`storage/overlays/dev/postgres-cluster.yaml` (`smoke` role only),
+`core/overlays/dev/gateway-cert.yaml` (`argocd` SAN only),
+`scripts/test-feature.sh` (`git-hosting.bats` excluded), and `.sops.yaml`
+(recipient equals the committed storage ciphertext's `recipient:` — real key).
+The wave-scoped `chart/` refinement was checked against
+`storage/overlays/dev/valkey/kustomization.yaml` and `smoke-database.yaml`. The
+item-4 deadlock was confirmed from Forgejo/Gitea's documented startup DB-blocking
+behavior (go-gitea/gitea#27079; config cheat-sheet `DB_RETRIES=10`,
+`DB_RETRY_BACKOFF=3s`) and ArgoCD's documented wave health-gating (Sync Phases and
+Waves). No live cluster state was mutated.
+
+**Gate status: CLEARED.** Items 1-3 decided to their conservative defaults;
+item 4 — originally escalated as a build-breaking, prerequisite ordering
+defect requiring a design revisit — is resolved: the coordinator corrected
+`design.md`'s intra-`forgejo` sync-wave scheme (2026-07-09, moving the
+`Database` CR from wave `5` to wave `-5`) and this plan was updated to match
+(the `Database` CR folded into Step 2, the old standalone step removed, and
+every downstream step renumbered). Marker updated to `*Reviewed 2026-07-09*`.

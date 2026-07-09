@@ -1,6 +1,6 @@
 # Implementation Plan: Observability (LGTM + Alloy)
 
-*Draft 2026-07-08*
+*Reviewed 2026-07-08*
 
 > Feature-step plan (feature-loop shape) inside the Project-Shape session
 > `2026-07-06-A-agrippa-local-k3d`. Transcribes the already-cleared feature
@@ -592,10 +592,20 @@ test "the grafana HTTPRoute, the gateway-cert SAN, and the Alloy DaemonSet land;
   `hostnames` and the feature test's `DASHBOARD_HOST`) or SNI-based cert
   selection fails even with an Accepted `HTTPRoute` — the same caveat
   Networking's own plan flagged for its own single-hostname append.
-  `core/overlays/dev/gateway-cert.yaml` is **not** a file any of the three
-  concurrently-planning `platform`-layer siblings (Keycloak, Forgejo,
-  Flagsmith) touch, so no coordination is needed — but diff it live before
-  committing to catch any unrelated drift regardless.
+  `core/overlays/dev/gateway-cert.yaml`'s `dnsNames` **is** a shared,
+  append-only list all three concurrently-planning `platform`-layer siblings
+  also write to (Keycloak `auth.`, Forgejo, and Flagsmith `flagsmith.` each
+  append their own host — verified live in their own plans' Step 4/Step 3).
+  The append-only-SAN pattern is exactly the coordination mechanism, not an
+  absence of one: re-inspect the file's live committed content immediately
+  before editing and append **only** this feature's own
+  `dashboard.davidsouther.com.127.0.0.1.nip.io` entry, never replacing the
+  list — a last-writer-wins overwrite would silently drop a sibling's already
+  landed SAN and break SNI/TLS for that host. cert-manager re-issues
+  `agrippa-gateway-tls` on the `dnsNames` change through the already-landed
+  `core` Application (an async cross-layer reconcile the build tolerates via
+  poll/retry, not assumed instantaneous with the commit), the same treatment
+  the sibling plans give this shared edit.
 - Edge case: confirm whether `apps/observability.yaml` actually needs
   `compare-options: ServerSideDiff=true` (added proactively in Step 0) now
   that a real Gateway-API-defaulted `HTTPRoute` exists — this is the exact
@@ -673,7 +683,11 @@ observability/overlays/dev/grafana-httproute.yaml (filled):
     rules: [{matches: [{path: {type: PathPrefix, value: "/"}}], backendRefs: [{name: grafana, port: 3000}]}]
 
 core/overlays/dev/gateway-cert.yaml:
-  spec.dnsNames: [argocd.127.0.0.1.nip.io, dashboard.davidsouther.com.127.0.0.1.nip.io]
+  spec.dnsNames: [ ...whatever is live committed..., dashboard.davidsouther.com.127.0.0.1.nip.io ]
+  # APPEND ONLY this feature's own host onto the live list -- never replace.
+  # Shared with the Keycloak/Forgejo/Flagsmith siblings, each appending their
+  # own SAN; the live list may already read e.g.
+  # [argocd, auth., <forgejo host>, flagsmith.] before this append.
 ```
 
 ## Step 5: Full GREEN and the regression sweep
@@ -742,3 +756,99 @@ run bats tests/observability.bats
 run mise run test:push && mise run test:feature
 run bats tests/cluster-core.bats tests/gitops.bats tests/networking.bats tests/storage.bats
 ```
+
+## Resolved by the long-loop reviewer (2026-07-08)
+
+The plan-gate reviewer read this artifact cold, checked its transcription
+fidelity against the cleared `design.md`, verified every repo-state and
+live-cluster claim, sanity-checked the five-chart step ordering, and re-verified
+the chart-repo migration live. One transcription defect was found and corrected
+in place (item 5); all other claims held. No item escalated. Recorded here as one
+audit trail, per the long-loop recording contract.
+
+**1. Transcription fidelity against the cleared `design.md`. Decided: faithful,
+with one corrected exception (item 5).** The plan transcribes the design's
+composition (five charts, one `observability` Application), the `-10`/`0`/`5`
+sync-wave scheme, every deployment mode (Loki monolithic, `tempo` chart local
+backend, `mimir-distributed` at `replicas: 1`, Grafana SQLite + `local-path`,
+Alloy DaemonSet with three self-discovery pipelines), the explicit
+`admin`/`admin` credential, the three `loki`/`prometheus`/`tempo` datasources,
+the single `grafana` `HTTPRoute` (explicit `matches` PathPrefix `/`, no
+`DestinationRule`), the one appended cert SAN, and the proactive
+`apps/observability.yaml` seam — all one-to-one with the design. Conservative
+default: no change needed beyond item 5.
+
+**2. Repo-state claims. Decided: all verified true, live.** `apps/observability.yaml`
+carries no seam yet (no `syncOptions`, no `compare-options` annotation; live app
+returns an empty `syncOptions`). `observability/overlays/dev/` holds only the
+`resources: []` placeholder `kustomization.yaml` — no `loki/`/`tempo/`/`mimir/`/
+`grafana/`/`alloy/` sub-dirs, no `namespace.yaml`, no `grafana-httproute.yaml` —
+the true Step-0 state. `.gitignore` carries `core/overlays/dev/*/charts/` and
+`storage/overlays/dev/*/charts/` but **not** an `observability/` line, so Step 0's
+claim and its `+observability/overlays/dev/*/charts/` fix are both correct.
+`scripts/test-feature.sh` already excludes `observability.bats` (present in the
+probe-suite `case` list). `core/overlays/dev/gateway-cert.yaml`'s current
+`dnsNames` is exactly `[argocd.127.0.0.1.nip.io]`. Live cluster confirms the
+`observability` Application is `Synced Healthy` on the empty placeholder and the
+`observability` namespace does not exist.
+
+**3. Five-chart step ordering (Loki+Tempo → Mimir → Grafana → Alloy+HTTPRoute+
+cert-SAN → full green). Decided: sound, no hidden cross-chart ordering risk.**
+Grafana's Step-3 datasource provisioning references the Loki/Tempo/Mimir Services,
+which land in Steps 1-2 — satisfied three independent ways: (a) build-step
+ordering commits the stores before Grafana, so at Step 3 they are already
+reconciled; (b) runtime sync-wave ordering places the stores at wave `0` (ArgoCD
+waits each wave Healthy) before Grafana at wave `5`, so the stores are actually
+Healthy, not merely resolvable, by the time Grafana provisions; (c) datasource
+provisioning is declarative config writing to Grafana's store with **no**
+connectivity or DNS lookup at provision time, and the design's own Failure-modes
+note confirms Grafana tolerates an unreachable datasource at startup and retries.
+The datasource-enumeration assertion checks provisioning (objects exist), not live
+query success, so store warm-up cannot regress it. The wave-5 `HTTPRoute` →
+`grafana:3000` backend and the wave-5 Alloy → wave-0 store push endpoints are both
+dynamically/eventually resolved (Istio backend resolution; Alloy WAL/retry), not
+hard sync-blocking. No analogue of the "Database CR before the app" class exists
+here.
+
+**4. Chart-repo migration re-check (`research:public`, live today). Decided: all
+three load-bearing claims still accurate.** `grafana` **moved** to
+`grafana-community.github.io/helm-charts` (chart `12.7.2`, released 2026-07-01,
+the sole general-purpose chart in that index) — general-purpose charts migrated
+2026-01-30. `loki` **moved** to `grafana-community.github.io/helm-charts` (forked
+2026-03-16; OSS users use the community repo). `alloy` has **not** moved — still
+`grafana.github.io/helm-charts` (chart `1.10.0`, active 2026 releases, no
+deprecation). The plan pins `grafana`/`loki` to grafana-community with a
+"re-verify live" note and `alloy` to `grafana.github.io/helm-charts` with
+"confirmed not moved; re-verify at build" — all correct. `tempo`/`mimir` remain
+plan-deferred to build (the 2026-01-30 announcement lists `tempo` among the
+migrated general-purpose charts, so `tempo` most likely also reads
+`grafana-community`; `mimir-distributed`'s index was not resolvable in this pass);
+the plan correctly defers both to live build-time verification.
+
+**5. Step 4's `core/overlays/dev/gateway-cert.yaml` "not shared with siblings"
+claim. Decided: corrected in place — the file IS a shared, append-only list all
+three platform siblings write to.** As authored, Step 4's edge case asserted
+`gateway-cert.yaml` "is **not** a file any of the three concurrently-planning
+`platform`-layer siblings touch, so no coordination is needed," and the Step 4
+Implementation Outline showed the result as a literal two-entry
+`[argocd, dashboard]` list. Both are wrong: `auth-keycloak/plan.md` (Step 4),
+`git-hosting-forgejo/plan.md` (Step 3), and `feature-flags-flagsmith/plan.md`
+(Step 4) each **append their own hostname SAN** to that exact file's `dnsNames`,
+and each explicitly guards it as a shared, concurrently-contended append-only
+list. The plan author transplanted the design's *true* claim about
+`apps/observability.yaml` (genuinely unshared — observability has its own apps
+file while the platform trio share `apps/platform.yaml`) onto the wrong file. The
+`design.md` itself does not make this error: it calls the cert "the **shared**
+`agrippa-gateway-tls` Certificate" and "a one-line, **append-only** edit." Left
+uncorrected, a builder trusting the "no coordination needed" rationale and the
+two-entry outline could overwrite the list, silently dropping the auth/forgejo/
+flagsmith SANs and breaking SNI/TLS for those hosts. Corrected the Step 4 edge
+case and Implementation Outline to state the append-only-SAN pattern is the
+coordination mechanism (re-inspect live, append only the `dashboard.` host, never
+replace) and to note the async cross-layer cert re-issue, matching all three
+siblings' own treatment. Conservative default, not an escalation: reversible
+(doc-only correction), in recorded scope (this feature's own plan), and
+determined by an existing project convention (the append-only-SAN seam Networking
+established and Storage's `managed.roles[]` mirrors). The append action the plan's
+prose already prescribed is unchanged; only the false rationale and the
+replace-flavored outline were fixed.

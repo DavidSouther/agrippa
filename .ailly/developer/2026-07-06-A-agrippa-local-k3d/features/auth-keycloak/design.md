@@ -234,11 +234,13 @@ Recorded here, instrumented when Observability lands; not asserted by the featur
   sealed Secret in one namespace leaves the other consumer unable to resolve it.
   Mitigated by the two-namespace materialization (Specification § The credential),
   the load-bearing correctness point of this design.
-- **A CR syncing before the Operator's CRDs/controller exist.** The `Keycloak` CR
-  before the Operator webhook; the `KeycloakRealmImport` before the `Keycloak` CR is
-  Ready. Mitigated by the intra-`keycloak` sync-wave scheme plus the
-  `ServerSideApply`/`SkipDryRunOnMissingResource` + `ServerSideDiff` seam this step
-  adds to `apps/platform.yaml`.
+- **A CR syncing before its prerequisite exists.** The `Keycloak` CR before the
+  Operator webhook; the `Keycloak` CR before the `keycloak` PostgreSQL database it
+  connects to at startup (the `Database` CR now lands at wave `-5`, ahead of the CR —
+  see § Correction by the long-loop reviewer (2026-07-09)); the `KeycloakRealmImport`
+  before the `Keycloak` CR is Ready. Mitigated by the intra-`keycloak` sync-wave scheme
+  plus the `ServerSideApply`/`SkipDryRunOnMissingResource` + `ServerSideDiff` seam this
+  step adds to `apps/platform.yaml`.
 - **A Keycloak-controller-owned status/defaulted field leaving `platform` permanently
   OutOfSync** — the exact symptom that made `core`/`storage` need `ServerSideDiff`.
   Anticipated and pre-empted by adding the full seam (both halves) to
@@ -275,7 +277,7 @@ platform/overlays/dev/keycloak/
 │   │                             #   (2 CRDs + the operator Deployment/RBAC manifest)
 │   └── namespace.yaml            # Namespace keycloak
 ├── keycloak.yaml                 # wave 0;  Keycloak CR `keycloak` (namespace keycloak)
-├── keycloak-database.yaml        # wave 5;  CNPG Database `keycloak` -- metadata.namespace: storage
+├── keycloak-database.yaml        # wave -5; CNPG Database `keycloak` -- metadata.namespace: storage
 ├── keycloak-realm.yaml           # wave 5;  KeycloakRealmImport `agrippa` (namespace keycloak)
 └── keycloak-httproute.yaml       # wave 5;  HTTPRoute `keycloak` (namespace keycloak)
 
@@ -317,16 +319,24 @@ inline on authored CRs):
 
 - **wave `-10` — Operator + CRDs + namespace:** the `keycloak` Namespace and the
   Operator's two CRDs, controller Deployment, and RBAC.
-- **wave `-5` — the decrypted credential Secrets:** the KSOPS-generated `keycloak-db`
-  and `keycloak-admin` Secrets in `keycloak`, present before the `Keycloak` CR
-  references them.
-- **wave `0` — the `Keycloak` CR:** needs the Operator's webhook up and both Secrets
-  present. (The shared `postgres` Cluster and the `keycloak` role it connects to are
-  provisioned by the `storage` layer, sync-wave 1 — which lands before `platform`,
-  sync-wave 2 — so Postgres and the role already exist by the time this CR reconciles.)
-- **wave `5` — the dependent resources:** the `keycloak` `Database` CR (in `storage`;
-  needs the Cluster + the `keycloak` role), the `KeycloakRealmImport` (needs the
-  `Keycloak` CR Ready), and the HTTPRoute (needs the Operator to have created
+- **wave `-5` — the decrypted credential Secrets and the `keycloak` `Database` CR:**
+  the KSOPS-generated `keycloak-db` and `keycloak-admin` Secrets in `keycloak`,
+  present before the `Keycloak` CR references them, **and the `keycloak` `Database` CR**
+  (in `storage`), so the `keycloak` PostgreSQL database physically exists before the
+  `Keycloak` CR's pod ever tries to connect to it. **Corrected placement** (see §
+  Correction by the long-loop reviewer (2026-07-09) below): the `Database` CR was
+  originally scheduled at wave `5`, *after* the wave-`0` `Keycloak` CR that connects to
+  it — a hard ArgoCD sync deadlock, not a safe ordering. Its only real prerequisites —
+  the CNPG operator and the `keycloak` role — are already live from the `storage`
+  layer's own sync (sync-wave 1), not from anything in this component, so moving it to
+  wave `-5` (alongside the two sealed Secrets) breaks the cycle cleanly.
+- **wave `0` — the `Keycloak` CR:** needs the Operator's webhook up, both Secrets
+  present, and the `keycloak` database already created (wave `-5`, above). (The shared
+  `postgres` Cluster and the `keycloak` role it connects to are provisioned by the
+  `storage` layer, sync-wave 1 — which lands before `platform`, sync-wave 2 — so
+  Postgres and the role already exist by the time this CR reconciles.)
+- **wave `5` — the dependent resources:** the `KeycloakRealmImport` (needs the
+  `Keycloak` CR Ready) and the HTTPRoute (needs the Operator to have created
   `keycloak-service`).
 
 ArgoCD syncs waves ascending and waits for each Healthy before the next.
@@ -760,6 +770,56 @@ touch as additive, idempotent, and last-writer-wins-safe across the three
 own `observability` Application (live-confirmed separate, does not touch this file).
 Internally consistent with the cited `apps/core.yaml`/`apps/storage.yaml` pattern.
 Escalation triggers: none.
+
+### Correction by the long-loop reviewer (2026-07-09): `keycloak` `Database` CR wave moved from `5` to `-5`
+
+The plan-gate reviewer (dispatched over the `plan.md` this design feeds) found
+that § Intra-`keycloak` sync-wave scheme's original placement of the `keycloak`
+`Database` CR at wave `5` — *after* the wave-`0` `Keycloak` CR that connects to it
+— is a hard ArgoCD sync deadlock, not a safe ordering, and applied the fix
+directly (§ scheme above now places the `Database` CR at wave `-5`, alongside the
+two sealed Secrets). This is the **third confirmed instance of one well-understood
+bug class** in this parallel platform band: the `feature-flags-flagsmith` plan-gate
+reviewer found Flagsmith's api pod blocks in `migrate`/`waitfordb` initContainers
+until its database exists and resequenced its own `Database` CR to wave `-5`; the
+`git-hosting-forgejo` plan-gate reviewer found Forgejo's Gitea binary crash-loops
+on a missing database (go-gitea/gitea#27079), which the coordinator fixed by moving
+that `Database` CR to wave `-5` (see `../git-hosting-forgejo/design.md`'s own
+"Correction by the coordinator (2026-07-09)"). With two confirmed sibling
+precedents and a coordinator-blessed template, this third instance is a *decide*,
+not an *escalate*.
+
+**Keycloak's actual startup/DB behavior was researched specifically (`research:public`),
+not assumed identical to a Go binary's `log.Fatal`.** The verdict is the same
+deadlock class, for Keycloak's own reasons: Keycloak (Quarkus/JVM) opens a JDBC
+connection to the *target* database (`spec.db.database: keycloak`) at startup to run
+its Liquibase schema migration; it creates the schema (tables) inside an existing
+database but never issues `CREATE DATABASE`, so a missing `keycloak` database yields
+`FATAL: database "keycloak" does not exist` ("Failed to obtain JDBC connection",
+keycloak/keycloak#19607), Keycloak's `start` fails, and the container exits into
+CrashLoopBackOff — it does not sit and wait for the database to appear on first boot.
+The Keycloak Operator gates the `Keycloak` CR's `Ready` condition on the pod's
+`/health/ready` probe, which cannot pass until that migration succeeds, so the
+`Keycloak` CR never reaches `Ready` while the database is absent. Placing the
+`Database` CR (the sole creator of database `keycloak`) at wave `5`, behind the
+health-gated wave-`0` `Keycloak` CR, is therefore the same circular deadlock Forgejo
+hit: the CR that needs the database can never go Ready, so ArgoCD never advances to
+the wave that would create it — and CNPG does not auto-create the database (its
+`managed.roles[]` append creates only the *role*; the `Database` CR is the sole
+creator, exactly as Storage's `smoke` proved). Storage's own `smoke` `Database` sits
+at wave `5` safely only because nothing in `storage` consumes the smoke database with
+a DB-gated startup; Keycloak is a wave-`0` consumer of its own database, so it is
+subject to the deadlock the smoke fixture never was.
+
+The fix — moving the `keycloak` `Database` CR to wave `-5`, ahead of the wave-`0`
+`Keycloak` CR — is mechanical, low-risk, reversible, paper-only (no live cluster or
+already-built sibling touched), and identical in shape to both siblings' resolutions.
+The CR's only real prerequisites (the CNPG operator and the `keycloak` role) are
+already live from the `storage` layer's own sync (sync-wave 1) before `platform`
+(sync-wave 2) starts, so the earlier wave loses nothing. The `plan.md` this design
+feeds is updated to match (the `Database` CR folded from its old Step 4 into Step 2 at
+wave `-5`; downstream steps adjusted), and its own draft gate is cleared against the
+corrected design.
 
 ## Feature Test
 

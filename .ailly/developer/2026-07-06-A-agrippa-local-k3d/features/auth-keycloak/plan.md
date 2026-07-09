@@ -1,6 +1,6 @@
 # Implementation Plan: Auth (Keycloak via the Keycloak Operator)
 
-*Draft 2026-07-08*
+*Reviewed 2026-07-09*
 
 **Feature test:** `tests/auth.bats`
 **User story:** Given the bootstrapped `agrippa-dev` cluster with this Auth content committed and reconciled by ArgoCD into the `platform` layer — the Keycloak Operator in the `keycloak` namespace, the `Keycloak` CR wired to the shared `postgres` Cluster over its plain-HTTP listener, the `keycloak` `Database` CR in `storage`, and the declaratively-imported `agrippa` realm — when an operator requests the `agrippa` realm's OIDC discovery document at `https://auth.127.0.0.1.nip.io/realms/agrippa/.well-known/openid-configuration` through the k3d `:443` host port-map, then the `platform` Application is Synced/Healthy, the `Keycloak` CR is Ready, the `KeycloakRealmImport` is done, the `keycloak` `Database` CR is applied, the discovery endpoint returns 200 with the correct `issuer`, and the served TLS certificate is issued by the local CA — proving the Operator + external-Postgres + declarative-realm-import + shared-Gateway/HTTPRoute/local-CA-TLS path end-to-end, the substrate a later OIDC integration binds to.
@@ -8,9 +8,9 @@
 **Steps:**
 - [ ] Step 0: API surface area (file layout, `apps/platform.yaml` sync seam, `.sops.yaml` recipient check)
 - [ ] Step 1: Wave `-10` — the Keycloak Operator + CRDs + namespace
-- [ ] Step 2: Wave `-5` — the two-namespace `keycloak-db` credential, `keycloak-admin`, and the `managed.roles[]` append
+- [ ] Step 2: Wave `-5` — the two-namespace `keycloak-db` credential, `keycloak-admin`, the `managed.roles[]` append, and the `keycloak` `Database` CR
 - [ ] Step 3: Wave `0` — the `Keycloak` CR
-- [ ] Step 4: Wave `5` — the `Database` CR, the `KeycloakRealmImport`, the HTTPRoute, and the Gateway cert's `dnsNames` append
+- [ ] Step 4: Wave `5` — the `KeycloakRealmImport`, the HTTPRoute, and the Gateway cert's `dnsNames` append
 - [ ] Step 5: Full GREEN — the discovery-endpoint + local-CA-TLS proof, and the regression sweep
 
 **Libraries & Skills (carried forward from `design.md`/`research.md`; load before each build step):**
@@ -55,17 +55,18 @@ Fix every file path, directory layout, and object name before any has real conte
 ```text
 platform/overlays/dev/keycloak/
 ├── kustomization.yaml            # NEW; resources: [] (operator/ lands Step 1; the sealed-credential
-│                                 #   sub-kustomization lands Step 2; keycloak.yaml lands Step 3;
-│                                 #   keycloak-database.yaml/keycloak-realm.yaml/keycloak-httproute.yaml
-│                                 #   land Step 4)
+│                                 #   sub-kustomization + keycloak-database.yaml land Step 2;
+│                                 #   keycloak.yaml lands Step 3;
+│                                 #   keycloak-realm.yaml/keycloak-httproute.yaml land Step 4)
 ├── operator/
 │   ├── kustomization.yaml        # wave -10; namespace: keycloak; resources: [namespace.yaml]
 │   │                             #   (3 pinned raw-manifest URLs -- 2 CRDs + the operator
 │   │                             #   Deployment/RBAC -- land Step 1)
 │   └── namespace.yaml            # Namespace keycloak (full content now; a Namespace has no spec)
 ├── keycloak.yaml                 # wave 0;  Keycloak CR `keycloak` name-only stub (spec lands Step 3)
-├── keycloak-database.yaml        # wave 5;  CNPG Database `keycloak` name-only stub --
-│                                 #   metadata.namespace: storage (spec lands Step 4)
+├── keycloak-database.yaml        # wave -5; CNPG Database `keycloak` name-only stub --
+│                                 #   metadata.namespace: storage (spec lands Step 2, ahead of the
+│                                 #   Keycloak CR that connects to it -- see Step 2/Step 3)
 ├── keycloak-realm.yaml           # wave 5;  KeycloakRealmImport `agrippa` name-only stub (spec lands Step 4)
 └── keycloak-httproute.yaml       # wave 5;  HTTPRoute `keycloak` name-only stub (spec lands Step 4)
 
@@ -115,13 +116,16 @@ metadata:
 # NOTE metadata.namespace: storage -- CNPG's Database.spec.cluster is a same-namespace-only
 # LocalObjectReference (issue #6043); this file lives in this feature's tree but the object
 # lands in `storage`, exactly as core's Certificate/Gateway land in istio-ingress.
+# NOTE wave -5 (not 5): the keycloak database must exist before the wave-0 Keycloak CR's
+# pod connects to it -- see Step 2's placement and the design's "Correction by the
+# long-loop reviewer (2026-07-09)".
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
 metadata:
   name: keycloak
   namespace: storage
   annotations:
-    argocd.argoproj.io/sync-wave: "5"
+    argocd.argoproj.io/sync-wave: "-5"
 ```
 
 ```yaml
@@ -169,8 +173,13 @@ test "the apps/platform.yaml seam is live (or already landed by a sibling); plat
   run kubectl --context k3d-agrippa-dev -n argocd get application platform \
     -o jsonpath='{.status.sync.status} {.status.health.status}'
   assert output == "Synced Healthy"    # unchanged -- still argocd.yaml-only content
-  run bash -c 'grep -c PLACEHOLDER .sops.yaml'
-  assert output == "0"                 # comment only; the recipient itself was already fixed by Storage's build
+  run bash -c 'grep -c "age: \"age1e8wr0" .sops.yaml'
+  assert output == "1"                 # the real, operative recipient is live (byte-identical to the
+                                       # recipient the committed, live-decrypting secrets/dev/storage/postgres/
+                                       # smoke.enc.yaml was sealed to). NOTE the leading COMMENT still literally
+                                       # reads "PLACEHOLDER recipient" -- stale text, not a gap; do NOT assert
+                                       # `grep -c PLACEHOLDER == 0` (it is 1: the comment matches), and do NOT
+                                       # run rotate-keys to "fix" it.
 ```
 
 - Edge case: if a concurrent sibling's build already landed the `apps/platform.yaml` seam first, this step's own edit would be a no-op diff (or a git merge conflict on the same lines if committed concurrently) — check the file's current committed state before editing, and treat "already there, byte-identical" as success, not a surprise (per `design.md`'s explicit instruction).
@@ -247,11 +256,13 @@ platform/overlays/dev/keycloak/operator/kustomization.yaml:
     - https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/<tag>/kubernetes/kubernetes.yml
 ```
 
-## Step 2: Wave `-5` — the two-namespace `keycloak-db` credential, `keycloak-admin`, and the `managed.roles[]` append
+## Step 2: Wave `-5` — the two-namespace `keycloak-db` credential, `keycloak-admin`, the `managed.roles[]` append, and the `keycloak` `Database` CR
 
-**Enables:** no feature-test assertion flips yet directly (nothing consumes these Secrets until Step 3's `Keycloak` CR references them), but this is the load-bearing prerequisite for THEN 1/THEN 3 and the design's one genuinely novel correctness point — the two-namespace credential materialization.
+**Enables:** THEN 3 (`kubectl -n storage get database.postgresql.cnpg.io keycloak -o jsonpath='{.status.applied}'` == `true`) — the `keycloak` PostgreSQL database now physically exists, created at wave `-5` **ahead of** the wave-`0` `Keycloak` CR that connects to it. No other feature-test assertion flips yet directly (nothing consumes the Secrets until Step 3's `Keycloak` CR references them), but this step is the load-bearing prerequisite for THEN 1 (the `Keycloak` CR can only reach Ready against an already-existing database) and carries the design's one genuinely novel correctness point — the two-namespace credential materialization.
 
-Generate the DB role's password **once**, in memory, then seal it into **two** ciphertext files differing only in `metadata.namespace` (`design.md` § "The credential: one password, two namespaces"): `secrets/dev/storage/postgres/keycloak.enc.yaml` (Secret `keycloak-db`, `namespace: storage`, `type: kubernetes.io/basic-auth`, `username: keycloak`) and `secrets/dev/platform/keycloak/keycloak-db.enc.yaml` (same shape, `namespace: keycloak`, same password). Generate a second, independent password for the admin bootstrap credential and seal it once into `secrets/dev/platform/keycloak/keycloak-admin.enc.yaml` (Secret `keycloak-admin`, `namespace: keycloak`, keys `username`+`password`). Add `postgres/keycloak.enc.yaml` to **Storage's existing** `secrets/dev/storage/secret-generator.yaml`'s `files:` list (currently `[postgres/smoke.enc.yaml, valkey/smoke.enc.yaml]` — append, do not replace) — the exact touch Storage's consumption contract sanctions. Fill this feature's own `secrets/dev/platform/keycloak/secret-generator.yaml` (new, `kind: ksops`) with `files: [keycloak-db.enc.yaml, keycloak-admin.enc.yaml]`, and wire it into `secrets/dev/platform/keycloak/kustomization.yaml`'s `generators:`. Wire `platform/overlays/dev/keycloak/kustomization.yaml`'s `resources:` to add `../../../../secrets/dev/platform/keycloak` (four levels up — one deeper than Storage's three, since the reference originates from the `keycloak/` subdirectory). Append **one** entry to the shared `postgres` Cluster's `spec.managed.roles[]` in `storage/overlays/dev/postgres-cluster.yaml` (currently `[{name: smoke, ...}]` — append, do not replace): `{name: keycloak, login: true, passwordSecret: {name: keycloak-db}}`.
+**Wave placement of the `keycloak` `Database` CR — corrected from the design's original wave `5` to wave `-5` (see `design.md`'s "Correction by the long-loop reviewer (2026-07-09)").** The design originally grouped the `Database` CR at wave `5`, alongside the realm import and HTTPRoute, *after* the wave-`0` `Keycloak` CR. That is a hard ArgoCD sync deadlock: Keycloak (Quarkus/JVM) opens a JDBC connection to `spec.db.database: keycloak` at startup to run its Liquibase migration and **never issues `CREATE DATABASE`**, so a missing `keycloak` database yields `FATAL: database "keycloak" does not exist`, Keycloak's `start` fails, and the pod crash-loops (CrashLoopBackOff) — the Operator's `Keycloak` CR `Ready` condition (gated on the pod's `/health/ready` probe) never goes True, ArgoCD's wave-`0` gate never clears, and the wave-`5` `Database` CR that alone creates the database is never applied. CNPG creates only the *role* from the `managed.roles[]` append, never the database, so nothing else breaks the cycle. This is the identical defect class the two parallel platform siblings hit: `feature-flags-flagsmith` (its api pod blocks in `migrate`/`waitfordb` initContainers) and `git-hosting-forgejo` (Gitea's `log.Fatal` on a missing DB, go-gitea/gitea#27079) both resequenced their own `Database` CR to wave `-5`. The `keycloak` `Database` CR's only real prerequisites — the CNPG operator and the `keycloak` role — are already live from the `storage` layer's own sync (sync-wave 1) before `platform` (sync-wave 2) starts, so folding it into this wave-`-5` step (alongside the sealed Secrets and the `managed.roles[]` append) loses nothing and breaks the deadlock cleanly.
+
+Generate the DB role's password **once**, in memory, then seal it into **two** ciphertext files differing only in `metadata.namespace` (`design.md` § "The credential: one password, two namespaces"): `secrets/dev/storage/postgres/keycloak.enc.yaml` (Secret `keycloak-db`, `namespace: storage`, `type: kubernetes.io/basic-auth`, `username: keycloak`) and `secrets/dev/platform/keycloak/keycloak-db.enc.yaml` (same shape, `namespace: keycloak`, same password). Generate a second, independent password for the admin bootstrap credential and seal it once into `secrets/dev/platform/keycloak/keycloak-admin.enc.yaml` (Secret `keycloak-admin`, `namespace: keycloak`, keys `username`+`password`). Add `postgres/keycloak.enc.yaml` to **Storage's existing** `secrets/dev/storage/secret-generator.yaml`'s `files:` list (currently `[postgres/smoke.enc.yaml, valkey/smoke.enc.yaml]` — append, do not replace) — the exact touch Storage's consumption contract sanctions. Fill this feature's own `secrets/dev/platform/keycloak/secret-generator.yaml` (new, `kind: ksops`) with `files: [keycloak-db.enc.yaml, keycloak-admin.enc.yaml]`, and wire it into `secrets/dev/platform/keycloak/kustomization.yaml`'s `generators:`. Wire `platform/overlays/dev/keycloak/kustomization.yaml`'s `resources:` to add `../../../../secrets/dev/platform/keycloak` (four levels up — one deeper than Storage's three, since the reference originates from the `keycloak/` subdirectory). Append **one** entry to the shared `postgres` Cluster's `spec.managed.roles[]` in `storage/overlays/dev/postgres-cluster.yaml` (currently `[{name: smoke, ...}]` — append, do not replace): `{name: keycloak, login: true, passwordSecret: {name: keycloak-db}}`. Finally, fill `keycloak-database.yaml`'s spec (`name: keycloak` — the actual PostgreSQL database name, the CRD-required field beyond `owner`/`cluster.name` Storage's build discovered; `owner: keycloak`; `cluster: {name: postgres}`) and wire it into `platform/overlays/dev/keycloak/kustomization.yaml`'s `resources:` at wave `-5` — alongside the sealed-credential sub-kustomization and ahead of the wave-`0` `Keycloak` CR (Step 3), so the `keycloak` database exists before the CR's pod connects (the corrected placement above).
 
 **Tests**
 
@@ -271,8 +282,14 @@ test "the keycloak-db credential is materialized identically in both namespaces;
   run kubectl --context k3d-agrippa-dev -n argocd get application storage \
     -o jsonpath='{.status.sync.status} {.status.health.status}'
   assert output == "Synced Healthy"    # the shared postgres Cluster's managed.roles[] append reconciled cleanly
+  run kubectl --context k3d-agrippa-dev -n storage get database.postgresql.cnpg.io keycloak \
+    -o jsonpath='{.status.applied}'
+  assert output == "true"              # the keycloak database exists before the wave-0 Keycloak CR connects (THEN 3)
 ```
 
+- Edge case: the `Database` CR lands at wave `-5` in **this** step, ahead of the wave-`0` `Keycloak` CR (Step 3) — the deadlock fix. `owner: keycloak` must resolve to the `keycloak` role appended just above (reconciled by the `storage` Application, sync-wave 1, ahead of `platform`); CNPG errors on `CREATE DATABASE ... OWNER keycloak` if the role is not yet present. The role append and the `Database` CR are two different ArgoCD Applications (`storage` and `platform`), so same-wave numbering alone does not guarantee cross-Application ordering — verify live rather than trust the wave annotation.
+- Edge case: confirm the exact CRD field spellings (`spec.name`, `spec.owner`, `spec.cluster.name`) against the pinned CNPG version at build — Storage's own build-time correction (the live CRD requires `spec.name` in addition to `owner`/`cluster.name`) is already reflected here, but re-verify against whatever CNPG version is live by this build.
+- Edge case: this `Database` CR lives in `platform/overlays/dev/keycloak/` (the `platform` Application's subtree) but targets `metadata.namespace: storage` — confirm the `platform` Application can create a resource into a namespace outside its own `destination.namespace` default (the design's cited precedent: the `storage` Application already creates resources into both `cnpg-system` and `storage`).
 - Edge case: the password must be generated **once** and reused for both ciphertext files — never regenerated independently per file, or CNPG's role password and the `Keycloak` CR's `db.passwordSecret` value will mismatch and Keycloak's DB connection will fail authentication (the exact failure mode `design.md`'s "Failure modes to design against" names).
 - Edge case: each `sops --encrypt` invocation needs `--filename-override` set to its own eventual committed path (`secrets/dev/storage/postgres/keycloak.enc.yaml` vs `secrets/dev/platform/keycloak/keycloak-db.enc.yaml`) so `.sops.yaml`'s `^secrets/dev/.*$` creation rule applies to stdin input on both — omitting it makes `sops` see `/dev/stdin`, matching no rule, and fail to encrypt.
 - Edge case: `storage/overlays/dev/postgres-cluster.yaml`'s `managed.roles[]` and `secrets/dev/storage/secret-generator.yaml`'s `files:` are both shared, mutable, append-only lists under concurrent contention from Forgejo/Flagsmith (each appends its own role/credential) — re-inspect the live committed content immediately before appending, append only this feature's own entry, and never reorder or drop an existing entry.
@@ -326,6 +343,20 @@ files:
   - keycloak-admin.enc.yaml
 ```
 
+```yaml
+# platform/overlays/dev/keycloak/keycloak-database.yaml (filled) -- wave -5, ahead of the Keycloak CR
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: keycloak
+  namespace: storage
+  annotations: {argocd.argoproj.io/sync-wave: "-5"}
+spec:
+  name: keycloak
+  owner: keycloak
+  cluster: {name: postgres}
+```
+
 ```text
 secrets/dev/storage/secret-generator.yaml:
   files: [postgres/smoke.enc.yaml, valkey/smoke.enc.yaml, postgres/keycloak.enc.yaml]   # append
@@ -337,6 +368,7 @@ platform/overlays/dev/keycloak/kustomization.yaml:
   resources:
     - operator/
     - ../../../../secrets/dev/platform/keycloak
+    - keycloak-database.yaml   # wave -5, ahead of keycloak.yaml (Step 3)
 
 storage/overlays/dev/postgres-cluster.yaml:
   spec.managed.roles:
@@ -346,7 +378,7 @@ storage/overlays/dev/postgres-cluster.yaml:
 
 ## Step 3: Wave `0` — the `Keycloak` CR
 
-**Enables:** THEN 1 (`kubectl -n keycloak get keycloak keycloak -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'` == `True`) — the Operator connected to the external shared Postgres over the plain-HTTP listener.
+**Enables:** THEN 1 (`kubectl -n keycloak get keycloak keycloak -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'` == `True`) — the Operator connected to the external shared Postgres over the plain-HTTP listener, reaching Ready against the **already-existing** `keycloak` database (created at wave `-5` in Step 2, ahead of this wave-`0` CR).
 
 Fill `keycloak.yaml`'s spec per `design.md` § "The `Keycloak` CR": `instances: 1`; `db: {vendor: postgres, host: postgres-rw.storage.svc, port: 5432, database: keycloak, usernameSecret: {name: keycloak-db, key: username}, passwordSecret: {name: keycloak-db, key: password}}`; `ingress: {enabled: false}`; `http: {httpEnabled: true}`; `hostname: {hostname: https://auth.127.0.0.1.nip.io}`; `proxy: {headers: xforwarded}` (exact `hostname.strict`/`proxy.headers` spellings build-verified — research open item 6); `bootstrapAdmin: {user: {secret: keycloak-admin}}`. Wire `keycloak.yaml` into `platform/overlays/dev/keycloak/kustomization.yaml`'s `resources:`.
 
@@ -362,7 +394,7 @@ test "the Keycloak CR connects to the shared Postgres and reaches Ready":
   assert status == 0    # the Operator's own Service; ingress.enabled: false means no Operator-owned Ingress
 ```
 
-- Edge case (a real build-time sequencing risk this plan flags rather than resolves, since it sits inside the cleared design's own wave assignment): the design places the `Keycloak` CR at wave `0` and the `keycloak` `Database` CR (which actually runs `CREATE DATABASE keycloak`) at wave `5` — *after* the Keycloak CR. Keycloak's own Postgres connection targets `spec.db.database: keycloak`, which cannot be connected to before that database physically exists. Whether the Operator's `Ready` condition genuinely blocks on the target database's existence (in which case wave `0` could stall waiting on wave `5`, which ArgoCD would not yet have applied — a deadlock) or whether Keycloak/its Operator tolerates connecting to `postgres` first and lazily creating/migrating the `keycloak` database is a build-time behavior to verify directly against the pinned Operator version; if it deadlocks, the conservative fix is moving `keycloak-database.yaml` to an earlier wave (e.g. `-5`, alongside the credential Secrets, ahead of the CR that needs it) — a build-time correction to the design's wave assignment, not a re-litigation of the credential/namespace decisions the design settled.
+- Edge case (**resolved** — the deadlock the design's original wave `5` assignment would have caused): the `Keycloak` CR at wave `0` opens a JDBC connection to `spec.db.database: keycloak` at startup to run its Liquibase migration and never issues `CREATE DATABASE`, so it cannot reach Ready before the `keycloak` database physically exists. The design originally placed the `keycloak` `Database` CR at wave `5`, *after* this CR — a hard ArgoCD sync deadlock (the health-gated wave-`0` CR never reaches Ready, so ArgoCD never advances to wave `5`, so the database is never created; CNPG's `managed.roles[]` append creates only the *role*, never the database). The long-loop reviewer resolved this by moving the `Database` CR to wave `-5` (Step 2 above; see `design.md`'s "Correction by the long-loop reviewer (2026-07-09)"), matching the `feature-flags-flagsmith` and `git-hosting-forgejo` siblings' identical resolution. So the `keycloak` database already exists by the time this CR reconciles; verify live that the CR reaches Ready against the pre-existing database rather than treating a non-Ready status as "still starting up."
 - Edge case: the shared `postgres` Cluster and the `keycloak` role (Step 2) must already exist by the time this CR reconciles — true by construction, since `storage` is sync-wave 1 and `platform` is sync-wave 2 (cross-layer ordering `gitops-argocd` already fixed), but confirm live rather than trust the layer-wave alone.
 - Edge case: `bootstrapAdmin` is silently ignored on any re-sync after the `master` realm already exists — expected, not a bug; do not design a test around repeated bootstrap.
 - Edge case: confirm the exact CRD field spellings (`spec.db.database`, `spec.hostname.hostname`/`.strict`, `spec.proxy.headers`, `spec.http.httpEnabled`, `spec.bootstrapAdmin.user.secret`) and the `status.conditions[type=="Ready"]` string against the pinned Operator version — the design fixes the shapes and names, build confirms spellings, and corrects `keycloak.yaml`/the feature test if any differ (the test is RED now regardless).
@@ -405,23 +437,20 @@ platform/overlays/dev/keycloak/kustomization.yaml:
   resources:
     - operator/
     - ../../../../secrets/dev/platform/keycloak
+    - keycloak-database.yaml   # landed Step 2 (wave -5)
     - keycloak.yaml
 ```
 
-## Step 4: Wave `5` — the `Database` CR, the `KeycloakRealmImport`, the HTTPRoute, and the Gateway cert's `dnsNames` append
+## Step 4: Wave `5` — the `KeycloakRealmImport`, the HTTPRoute, and the Gateway cert's `dnsNames` append
 
-**Enables:** THEN 2 (`KeycloakRealmImport` `Done` == `True`), THEN 3 (`Database` `status.applied` == `true`), and WHEN + THEN 4/5/6 (the discovery endpoint reachable through the Gateway with the correct `issuer` and the local-CA cert) — every remaining assertion.
+**Enables:** THEN 2 (`KeycloakRealmImport` `Done` == `True`) and WHEN + THEN 4/5/6 (the discovery endpoint reachable through the Gateway with the correct `issuer` and the local-CA cert) — every remaining assertion. (THEN 3, the `Database` `status.applied`, already flipped in Step 2, where the `keycloak` `Database` CR now lands at wave `-5`, ahead of the `Keycloak` CR.)
 
-Fill `keycloak-database.yaml`'s spec: `name: keycloak` (the actual PostgreSQL database name — Storage's own build found this CRD-required field beyond `owner`/`cluster.name` alone; carry that correction forward here rather than rediscover it), `owner: keycloak`, `cluster: {name: postgres}`. Fill `keycloak-realm.yaml`'s spec: `keycloakCRName: keycloak`, `realm: {id: agrippa, realm: agrippa, enabled: true, displayName: Agrippa}`. Fill `keycloak-httproute.yaml`, copying `core/overlays/dev/argocd-httproute.yaml`'s exact shape but targeting the plain-HTTP backend directly (no `DestinationRule` — the whole reason `spec.http.httpEnabled: true` was chosen): `parentRefs: [{name: agrippa-gateway, namespace: istio-ingress, sectionName: https}]`, `hostnames: [auth.127.0.0.1.nip.io]`, `rules: [{matches: [{path: {type: PathPrefix, value: /}}], backendRefs: [{name: keycloak-service, port: 8080}]}]` (`matches:` authored explicitly, mirroring Networking's own structural-default fix for the identical nested-array OutOfSync symptom). Append `auth.127.0.0.1.nip.io` to `core/overlays/dev/gateway-cert.yaml`'s `dnsNames` (currently `[argocd.127.0.0.1.nip.io]` — append, do not replace; shared with Forgejo/Flagsmith, each appending their own host — re-check the file's live committed content first). Wire `keycloak-database.yaml`, `keycloak-realm.yaml`, and `keycloak-httproute.yaml` into `platform/overlays/dev/keycloak/kustomization.yaml`'s `resources:`.
+Fill `keycloak-realm.yaml`'s spec: `keycloakCRName: keycloak`, `realm: {id: agrippa, realm: agrippa, enabled: true, displayName: Agrippa}`. Fill `keycloak-httproute.yaml`, copying `core/overlays/dev/argocd-httproute.yaml`'s exact shape but targeting the plain-HTTP backend directly (no `DestinationRule` — the whole reason `spec.http.httpEnabled: true` was chosen): `parentRefs: [{name: agrippa-gateway, namespace: istio-ingress, sectionName: https}]`, `hostnames: [auth.127.0.0.1.nip.io]`, `rules: [{matches: [{path: {type: PathPrefix, value: /}}], backendRefs: [{name: keycloak-service, port: 8080}]}]` (`matches:` authored explicitly, mirroring Networking's own structural-default fix for the identical nested-array OutOfSync symptom). Append `auth.127.0.0.1.nip.io` to `core/overlays/dev/gateway-cert.yaml`'s `dnsNames` (currently `[argocd.127.0.0.1.nip.io]` — append, do not replace; shared with Forgejo/Flagsmith, each appending their own host — re-check the file's live committed content first). Wire `keycloak-realm.yaml` and `keycloak-httproute.yaml` into `platform/overlays/dev/keycloak/kustomization.yaml`'s `resources:`. (The `keycloak` `Database` CR was already filled and wired at wave `-5` in Step 2, per the deadlock correction — not re-authored here.)
 
 **Tests**
 
 ```bash
-test "the Database CR applies, the realm import is done, and the discovery endpoint is reachable with the local-CA cert":
-  run kubectl --context k3d-agrippa-dev -n storage get database.postgresql.cnpg.io keycloak \
-    -o jsonpath='{.status.applied}'
-  assert status == 0
-  assert output == "true"
+test "the realm import is done, and the discovery endpoint is reachable with the local-CA cert":
   run kubectl --context k3d-agrippa-dev -n keycloak get keycloakrealmimport agrippa \
     -o jsonpath='{.status.conditions[?(@.type=="Done")].status}'
   assert status == 0
@@ -436,27 +465,12 @@ test "the Database CR applies, the realm import is done, and the discovery endpo
 ```
 
 - Edge case: `core/overlays/dev/gateway-cert.yaml`'s `dnsNames` append reconciles through the **`core`** Application (a different, already-landed, already-Synced/Healthy layer at sync-wave 0), independent of `platform`'s own wave sequence — cert-manager must actually re-issue `agrippa-gateway-tls` with the new SAN before the discovery endpoint's TLS handshake presents a cert covering `auth.127.0.0.1.nip.io`; this is an async cross-layer reconcile the build must tolerate (poll/retry), not assumed instantaneous with the commit.
-- Edge case: the `Database` CR's `owner: keycloak` must resolve to a role that already exists (Step 2's `managed.roles[]` entry, reconciled on `storage`, sync-wave 1, ahead of `platform`) — confirm live rather than trust the cross-layer wave alone, mirroring Storage's own Step 4 edge case.
-- Edge case (inherited from Step 3's flagged risk): if the `Keycloak` CR at wave `0` did not in fact reach Ready without the database existing, this step's `Database` CR arriving at wave `5` is the resolution — but if wave `0` genuinely deadlocked first, this step never gets applied at all; confirm Step 3 actually went Ready before treating this step's own non-progress as a problem local to this step.
+- Edge case: the `keycloak` `Database` CR and the `Keycloak` CR reaching Ready are both prerequisites already satisfied before this step (the `Database` CR at wave `-5` in Step 2, the `Keycloak` CR at wave `0` in Step 3) — the wave-`5` resources here (realm import, HTTPRoute) depend on the Ready `Keycloak` CR and the created `keycloak-service`; confirm Step 3 actually went Ready before treating this step's own non-progress as a problem local to this step.
 - Edge case: `KeycloakRealmImport.spec.keycloakCRName: keycloak` requires the same-namespace `Keycloak` CR to already be `Ready` (Step 3) — the wave gate (`0` before `5`) should guarantee this, verify live.
 - Edge case: `core/overlays/dev/gateway-cert.yaml`'s `dnsNames` list is a shared, mutable, append-only list under concurrent contention from Forgejo/Flagsmith (each appends its own host) — re-inspect the live committed content immediately before appending.
 - Edge case: confirm the exact `status.applied`/`status.conditions[type=="Done"]` strings and the discovery document's `issuer` JSON key spelling against the pinned Operator version — correcting `tests/auth.bats`' selectors here if build-time verification finds a difference (a test-definition correction inherited from live re-verification, mirroring both siblings' final steps), not new test authorship.
 
 **Implementation Outline**
-
-```yaml
-# platform/overlays/dev/keycloak/keycloak-database.yaml (filled)
-apiVersion: postgresql.cnpg.io/v1
-kind: Database
-metadata:
-  name: keycloak
-  namespace: storage
-  annotations: {argocd.argoproj.io/sync-wave: "5"}
-spec:
-  name: keycloak
-  owner: keycloak
-  cluster: {name: postgres}
-```
 
 ```yaml
 # platform/overlays/dev/keycloak/keycloak-realm.yaml (filled)
@@ -506,10 +520,10 @@ platform/overlays/dev/keycloak/kustomization.yaml:
   resources:
     - operator/
     - ../../../../secrets/dev/platform/keycloak
-    - keycloak.yaml
-    - keycloak-database.yaml
-    - keycloak-realm.yaml
-    - keycloak-httproute.yaml
+    - keycloak-database.yaml   # landed Step 2 (wave -5)
+    - keycloak.yaml            # landed Step 3 (wave 0)
+    - keycloak-realm.yaml      # this step (wave 5)
+    - keycloak-httproute.yaml  # this step (wave 5)
 ```
 
 ## Step 5: Full GREEN — the discovery-endpoint + local-CA-TLS proof, and the regression sweep
@@ -550,3 +564,129 @@ run bats tests/auth.bats
 run mise run test:push && mise run test:feature
 run bats tests/cluster-core.bats tests/gitops.bats tests/networking.bats tests/storage.bats tests/rotate-keys.bats
 ```
+
+## Resolved by the long-loop reviewer (2026-07-09)
+
+This is a paper plan against the cleared feature `design.md` in this folder; it has
+not been built. A separately dispatched long-loop reviewer read it cold and, per the
+completed siblings' precedent, checked: (1) transcription fidelity against the cleared
+`design.md` (no re-litigating design decisions), (2) the plan's repo-state claims
+against the actually-committed files and the live `k3d-agrippa-dev` cluster (read-only,
+nothing applied or mutated), and (3) the `keycloak` `Database` CR's wave placement for
+the now-confirmed ordering-vs-dependency deadlock this parallel platform band has hit
+twice already. Items 1-2 cleared with one test-assertion correction (item 2). Item 3 —
+the critical one — was **decided and applied directly** (not escalated): with two
+confirmed sibling precedents (`git-hosting-forgejo`, `feature-flags-flagsmith`) and a
+coordinator-blessed template for this exact bug class, and having researched Keycloak's
+own startup DB behavior specifically, the reviewer moved the `keycloak` `Database` CR
+from wave `5` to wave `-5` in both `design.md` and this plan. No escalation trigger
+(irreversible, out of recorded scope, or underdetermined) fired, so this plan's draft
+gate is cleared (marker now `*Reviewed 2026-07-09*`).
+
+**1. Transcription fidelity against the cleared `design.md`. Decided: faithful — no
+change needed beyond the wave correction (item 3).** Every step transcribes the
+design's § Specification: the `apps/platform.yaml` two-part sync seam (Step 0), the
+`platform/overlays/dev/keycloak/` + `secrets/dev/platform/keycloak/` layout and the
+four-tier `-10/-5/0/5` wave scheme (Steps 0-4), the two-namespace `keycloak-db`
+credential materialization plus the `keycloak-admin` credential and the storage
+`managed.roles[]` append (Step 2), the `Keycloak` CR spec (Step 3), the
+`KeycloakRealmImport`/HTTPRoute/`dnsNames` SAN append (Step 4), and the
+proof-and-regression sweep (Step 5). The `Keycloak` CR's `spec.db`/`hostname`/`proxy`/
+`bootstrapAdmin` fields, the two-namespace credential discipline (one password → two
+ciphertext files differing only in `metadata.namespace`), the raw-manifest Operator
+install, and the plain-HTTP HTTPRoute (no `DestinationRule`) all match the design.
+Build-time deferrals (Operator/Keycloak version pin, exact CRD field/status-string
+spellings, RBAC namespace patch, `hostname.strict`/`proxy.headers` values) are
+legitimate `research:public` build-phase items, correctly left open.
+
+**2. Repo-state claims re-verified live (read-only). Decided: accurate, with one
+corrected Step 0 test assertion.** Confirmed against the working tree and the live
+cluster: `apps/platform.yaml` carries `syncPolicy.automated` only (no `syncOptions`, no
+`compare-options` annotation) — the shared seam has not landed and no sibling has raced
+it in; `platform/overlays/dev/kustomization.yaml` is `resources: [argocd.yaml]` only (no
+`keycloak/`, `forgejo/`, or `flagsmith/` subdir); `storage/overlays/dev/
+postgres-cluster.yaml`'s `managed.roles[]` holds only `smoke` (live cluster confirms
+`{.spec.managed.roles[*].name}` == `smoke`); `core/overlays/dev/gateway-cert.yaml`'s
+`dnsNames` holds only `argocd.127.0.0.1.nip.io`; `scripts/test-feature.sh` already
+excludes `auth.bats` in its probe-suite `case` list; the live `platform` Application is
+`Synced/Healthy`, and no `keycloak`/Keycloak-CRD/`keycloak` namespace exists yet. **The
+`.sops.yaml` recipient is a real, operative key, not a literal placeholder:** its value
+`age1e8wr0f85w0yfqgxc3pc6426ghlu5xt069znn5yuwrtwz30u23quqjcx6vc` is byte-identical to
+the `recipient:` embedded in the already-committed, live-decrypting
+`secrets/dev/storage/postgres/smoke.enc.yaml`, so the plan's operative conclusion (no
+`.sops.yaml` change needed; Keycloak's sealing will round-trip in-cluster) holds. **But
+the file's leading *comment* still literally reads "PLACEHOLDER recipient"** — stale
+text, not a gap — so Step 0's original test assertion `grep -c PLACEHOLDER .sops.yaml`
+== `0` was **wrong** (the actual count is `1`, matching that comment line) and would
+have failed the step. Corrected to a positive check that the operative recipient
+(`age1e8wr0…`) is present, with a note not to assert `PLACEHOLDER`-absence and not to
+run `rotate-keys` to "fix" the stale comment. (Cleaning up the comment is a project-wide
+secrets-custody nicety outside this feature-step's recorded scope; the plan correctly
+makes no `.sops.yaml` edit.) Reversible, in-scope, determined — no escalation.
+
+**3. The `keycloak` `Database` CR wave placement (design's wave `5` vs. wave `-5`).
+Decided: corrected to wave `-5`, applied directly to both `design.md` and this plan —
+the same fix the two parallel siblings landed.** The originally-transcribed scheme
+(`Database` CR at wave `5`, *after* the wave-`0` `Keycloak` CR) is a hard ArgoCD sync
+deadlock. **Keycloak's actual startup/DB behavior was researched specifically
+(`research:public`), not assumed identical to Forgejo's Go binary:** Keycloak
+(Quarkus/JVM) opens a JDBC connection to the *target* database (`spec.db.database:
+keycloak`) at startup to run its Liquibase schema migration, and **never issues `CREATE
+DATABASE`** (it creates tables inside an existing database only), so a missing
+`keycloak` database yields `FATAL: database "keycloak" does not exist` ("Failed to
+obtain JDBC connection", keycloak/keycloak#19607); Keycloak's `start` then fails and the
+container exits into CrashLoopBackOff — it does **not** wait gracefully for the database
+to appear on first boot. The Keycloak Operator gates the `Keycloak` CR's `Ready`
+condition on the pod's `/health/ready` probe, which cannot pass until that migration
+succeeds, so the CR never reaches Ready while the database is absent. Placing the
+`Database` CR (the sole creator of database `keycloak`) at wave `5`, behind the
+health-gated wave-`0` `Keycloak` CR, is therefore the identical circular deadlock class
+`git-hosting-forgejo` and `feature-flags-flagsmith` both hit and both fixed by moving
+their own `Database` CR to wave `-5`: the CR that needs the database can never go Ready,
+so ArgoCD never advances to the wave that would create it, and CNPG's `managed.roles[]`
+append creates only the *role*, never the database. (This is not the graceful-retry
+exemption the review question hypothesized — Keycloak fails hard on the missing target
+database, and even an unbounded retry could not bridge a database whose creation is
+strictly wave-gated behind the pod's own health.) Storage's own `smoke` `Database` sits
+at wave `5` safely only because nothing in `storage` consumes the smoke database with a
+DB-gated startup; Keycloak is a wave-`0` consumer of its own database, so it is subject
+to the deadlock the smoke fixture never was. The design was internally inconsistent on
+exactly this point (its § User Journey and § Failure modes both imply the database
+exists before the `Keycloak` CR reaches Ready, which its original wave scheme violated).
+**Fix applied:** `design.md` § Intra-`keycloak` sync-wave scheme now places the
+`Database` CR at wave `-5` (with a "Correction by the long-loop reviewer (2026-07-09)"
+subsection recording the reasoning), and this plan folds the `Database` CR's fill and
+wiring from its old Step 4 into Step 2 (wave `-5`, alongside the sealed credentials and
+the `managed.roles[]` append), moves THEN 3's `status.applied` assertion to Step 2,
+updates Step 0's stub annotation, rewrites Step 3's formerly-deferred deadlock edge case
+as resolved, and drops the `Database` CR from Step 4 (which keeps the realm import,
+HTTPRoute, and `dnsNames` append at wave `5`). The `Database` CR's only real
+prerequisites — the CNPG operator and the `keycloak` role — are already live from the
+`storage` layer's own sync (sync-wave 1) before `platform` (sync-wave 2) starts, so the
+earlier wave loses nothing. Reversible (a one-line annotation edit plus paper
+reorganization), in-scope, determined — decided, not escalated, per the explicit
+two-precedents-and-a-template basis.
+
+**Reviewer verification (2026-07-09).** Checked live, read-only, against the committed
+tree and the `k3d-agrippa-dev` cluster context: `apps/platform.yaml` (no seam),
+`platform/overlays/dev/kustomization.yaml` (`resources: [argocd.yaml]`),
+`platform/overlays/dev/` and `secrets/dev/platform/` (no sibling landing yet),
+`storage/overlays/dev/postgres-cluster.yaml` (`smoke` role only; live cluster confirms),
+`core/overlays/dev/gateway-cert.yaml` (`argocd` SAN only), `scripts/test-feature.sh`
+(`auth.bats` excluded), and `.sops.yaml` (recipient byte-identical to the committed
+storage ciphertext's `recipient:` — real key; `grep -c PLACEHOLDER` == `1`, comment
+only). No custom ArgoCD health check for `k8s.keycloak.org/Keycloak` exists in the repo
+(none is shipped built-in either — argoproj/argo-cd#16509/#22897 are open requests),
+which does not change the verdict: the deadlock lands regardless via the crash-looping
+StatefulSet child gating the App's health and the incremental build's own Step-3-Ready
+assertion, and the fix is decisively the sibling-consistent conservative default. The
+item-3 deadlock was confirmed from Keycloak's documented startup DB-connection behavior
+(keycloak/keycloak#19607; the Operator's `/health/ready`-gated `Ready` condition) and
+ArgoCD's documented wave health-gating. No live cluster state was mutated.
+
+**Gate status: CLEARED.** Items 1-2 decided to their conservative defaults (item 2 with
+a corrected Step 0 test assertion); item 3 — the confirmed build-breaking DB-wave
+deadlock — is resolved by moving the `keycloak` `Database` CR from wave `5` to wave `-5`
+in both `design.md` and this plan, matching the two parallel siblings' identical fix and
+applied directly under the long-loop decide (not escalate) basis. Marker updated to
+`*Reviewed 2026-07-09*`.

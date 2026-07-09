@@ -278,3 +278,24 @@ From the feature-step `2026-07-06-A-agrippa-local-k3d/features/storage-postgres-
   non-final bare `[[ ]]` with an idiom that actually gates. Low urgency (both suites are
   currently green for the right underlying reason, live-verified by their own build phases) but
   a latent false-GREEN risk on any future regression in those two components.
+
+## Design pattern: a `Database` CR must precede its consuming Deployment's own wave (cross-cutting)
+
+- **A per-app CNPG `Database` CR must sync-wave *before* (or alongside) any Deployment that
+  connects to it at startup — never after.** Storage's own `smoke` fixture placed its `Database`
+  CR at wave `5` and that was safe only because storage has no consumer Deployment of its own;
+  every later app that both creates a database AND runs a pod against it hits a real ArgoCD
+  sync-wave deadlock if the `Database` CR is scheduled after the pod: most app runtimes (Gitea/
+  Forgejo, Keycloak's Quarkus startup, Flagsmith's Django `waitfordb`/migrate init container)
+  block or crash-loop when the target database doesn't exist yet, so the pod's Deployment never
+  reaches Healthy — which permanently blocks ArgoCD from ever reaching the later wave that would
+  create the database. Confirmed and fixed identically three times this session across the
+  parallel Features 5-7 build (Auth/Keycloak, Git hosting/Forgejo, Feature flags/Flagsmith): each
+  `Database` CR moved from wave `5` to wave `-5`, alongside the KSOPS-sealed credential Secrets —
+  its only real prerequisites (the CNPG operator, the app's `managed.roles[]` role) are already
+  live from the `storage` layer's own earlier sync-wave, not from anything in the consuming
+  component itself, so there is no cost to scheduling it early. **Feature 9 (Workloads) does not
+  use Postgres for resume/trips (both are static sites), so this pattern likely does not recur
+  there** — but any future feature-step adding a Postgres-backed app should default the
+  `Database` CR to an early wave (`-5`, with the credentials) rather than transcribing Storage's
+  `smoke`-fixture wave (`5`) as if it were a generally-safe precedent.

@@ -243,7 +243,7 @@ platform/overlays/dev/
 └── forgejo/
     ├── kustomization.yaml        # helmCharts: [forgejo]; resources: the CRs + secrets kustomization
     ├── namespace.yaml            # wave -10; Namespace forgejo (helm template emits none)
-    ├── forgejo-database.yaml     # wave 5; CNPG Database `forgejo` (ns storage; owner/cluster)
+    ├── forgejo-database.yaml     # wave -5; CNPG Database `forgejo` (ns storage; owner/cluster)
     ├── httproute.yaml            # wave 0; HTTPRoute `forgejo` (ns forgejo) -> forgejo Service
     └── (helmCharts: forgejo)     # wave 0; the Forgejo Deployment/Service/PVC/ConfigMap (ns forgejo)
 
@@ -323,17 +323,28 @@ CRs). Ordering inside the component:
 
 - **wave `-10`** — the `forgejo` Namespace.
 - **wave `-5`** — the KSOPS-decrypted `forgejo-admin` and `forgejo-db` Secrets,
-  present before anything references them.
+  and the `forgejo` `Database` CR (in `storage`; needs only the CNPG operator and
+  the `forgejo` role, both already live from `storage`'s own sync — no dependency
+  on anything in this wave or later). **Corrected placement** (design revised
+  2026-07-08, see § Resolved by the long-loop reviewer below): the `Database` CR
+  was originally scheduled at wave `5`, after the chart. That is a hard deadlock,
+  not a defense-in-depth ordering: Forgejo/Gitea blocks on its DB *connection* at
+  startup (`DB_RETRIES`×`DB_RETRY_BACKOFF` ≈ 30s, then `log.Fatal`/CrashLoopBackOff
+  — go-gitea/gitea#27079) and never passes readiness, so ArgoCD's wave-`0`
+  Deployment never reaches Healthy — which permanently blocks wave `5`, the very
+  wave responsible for creating the database the Deployment is crash-looping on.
+  Moving the `Database` CR to wave `-5` (its only real prerequisites — the CNPG
+  operator and the `forgejo` role — are already satisfied from the live `storage`
+  layer, not from anything in this component) breaks the cycle cleanly.
 - **wave `0`** — the shared operands: the Forgejo `helmCharts:` release (which
-  references both Secrets) and the `HTTPRoute`. The `forgejo` Postgres role is
-  provisioned by the append to `storage`'s wave-0 Cluster, which is already
-  Healthy from Storage's own sync.
-- **wave `5`** — the `forgejo` `Database` CR (needs the operator running and the
-  `forgejo` role to exist as its owner).
+  references both Secrets, and connects to the now-already-created `forgejo`
+  database) and the `HTTPRoute`. The `forgejo` Postgres role is provisioned by
+  the append to `storage`'s wave-0 Cluster, which is already Healthy from
+  Storage's own sync.
 
 ArgoCD syncs waves ascending and waits for each Healthy before the next, so the
-Forgejo pod never starts before its DB credential Secret exists, and the
-`Database` never applies before its owner role.
+Forgejo pod never starts before both its DB credential Secret and the `forgejo`
+database itself exist.
 
 ### The shared Gateway route (consuming Networking's contract)
 
@@ -659,6 +670,30 @@ simple commands, and a truly-final `[[ ]]` all gate. The `TASKS.md` record
 (`## Test-quality: bats non-final [[ ]] doesn't gate`) is accurate, and this step's
 own `tests/git-hosting.bats` is free of the footgun: every content assertion uses
 `grep -q`/`grep -qF` or `[ … ]`, and its only `[[` is inside a comment (line 138).
+
+### Correction by the coordinator (2026-07-09): `forgejo` `Database` CR wave moved from `5` to `-5`
+
+The plan-gate reviewer (dispatched next, over the plan this design feeds) found
+that § Intra-`forgejo` sync-wave scheme's original placement of the `forgejo`
+`Database` CR at wave `5` — *after* the wave-`0` Forgejo chart release that
+connects to it — is a hard ArgoCD sync deadlock, not a safe ordering: Forgejo
+blocks on its DB connection at pod startup and crash-loops rather than becoming
+Healthy (go-gitea/gitea#27079), so wave `0` never completes, which permanently
+blocks wave `5` — the very wave that would create the database the pod needs.
+This reproduces the identical defect class the `feature-flags-flagsmith`
+sibling's plan-gate reviewer independently found and fixed the same way in its
+own design/plan pair. The reviewer correctly scoped this as outside a plan
+reviewer's own transcribe-faithfully remit (fixing it means revising this
+design's own wave scheme, not just the plan derived from it) and escalated
+rather than deciding unilaterally. The coordinator resolved it directly, since
+the fix is mechanical, low-risk, reversible, paper-only (no live cluster or
+already-built sibling touched), and independently confirmed by two unrelated
+technical analyses: § Intra-`forgejo` sync-wave scheme above now places the
+`Database` CR at wave `-5` (alongside the two sealed Secrets — its only real
+prerequisites, the CNPG operator and the `forgejo` role, are already live from
+`storage`'s own sync, not from anything else in this component). The plan this
+design feeds is updated to match, and its own draft gate is re-reviewed against
+the corrected design rather than left escalated.
 
 ## Feature Test
 
