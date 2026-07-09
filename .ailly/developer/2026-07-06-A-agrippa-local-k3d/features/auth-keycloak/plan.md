@@ -10,7 +10,7 @@
 - [x] Step 1: Wave `-10` — the Keycloak Operator + CRDs + namespace
 - [x] Step 2: Wave `-5` — the two-namespace `keycloak-db` credential, `keycloak-admin`, the `managed.roles[]` append, and the `keycloak` `Database` CR
 - [x] Step 3: Wave `0` — the `Keycloak` CR
-- [ ] Step 4: Wave `5` — the `KeycloakRealmImport`, the HTTPRoute, and the Gateway cert's `dnsNames` append
+- [x] Step 4: Wave `5` — the `KeycloakRealmImport`, the HTTPRoute, and the Gateway cert's `dnsNames` append
 - [ ] Step 5: Full GREEN — the discovery-endpoint + local-CA-TLS proof, and the regression sweep
 
 **Libraries & Skills (carried forward from `design.md`/`research.md`; load before each build step):**
