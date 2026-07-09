@@ -9,3 +9,4 @@ resources:
   - loki/
   - tempo/
   - mimir/
+  - grafana/

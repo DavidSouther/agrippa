@@ -29,8 +29,8 @@ Closing Bell critical task 4.
 **Steps:**
 - [x] Step 0: API surface area
 - [x] Step 1: Wave `-10`/`0` (part) — namespace, Loki, Tempo
-- [ ] Step 2: Wave `0` (part) — Mimir
-- [ ] Step 3: Wave `5` (part) — Grafana
+- [x] Step 2: Wave `0` (part) — Mimir
+- [x] Step 3: Wave `5` (part) — Grafana
 - [ ] Step 4: Wave `5` (rest) — Alloy, the Grafana `HTTPRoute`, the gateway-cert SAN
 - [ ] Step 5: Full GREEN and the regression sweep
 
