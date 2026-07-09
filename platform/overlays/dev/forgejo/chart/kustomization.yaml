@@ -30,6 +30,21 @@
 # own FORGEJO__<SECTION>__<KEY> convention, not Gitea's legacy GITEA__
 # prefix) -- matches the design's assumption exactly, no correction needed.
 #
+# BUILD-TIME CORRECTION (live-verified the hard way -- a real ArgoCD
+# ServerSideApply failure, not caught by `kustomize build`/`helm template`
+# rendering cleanly): `gitea.additionalConfigFromEnvs` entries are spliced
+# **directly** into the init container's `env:` list
+# (templates/gitea/deployment.yaml), so each entry must already be a
+# well-formed core/v1 EnvVar object -- `name` + `valueFrom.secretKeyRef`,
+# exactly the chart's own README example -- NOT the design/plan's assumed
+# `envName`/`secretKeyRef` shorthand (a Gitea-chart-ism that does not exist
+# in this schema). `helm template`/kustomize's local render doesn't
+# validate against the K8s OpenAPI schema, so this only surfaced live:
+# ArgoCD's ServerSideApply (Step 0's seam) rejected the Deployment with
+# "field not declared in schema" on
+# `initContainers[name="init-app-ini"].env[name=""].envName`. Corrected to
+# `name`/`valueFrom.secretKeyRef` below.
+#
 # BUILD-TIME FINDING (live-verified via chart template inspection): the
 # admin existingSecret's expected keys are literally `username`/`password`
 # (templates/gitea/deployment.yaml's GITEA_ADMIN_USERNAME/PASSWORD
@@ -70,10 +85,11 @@ helmCharts:
             NAME: forgejo
             USER: forgejo
         additionalConfigFromEnvs:
-          - envName: FORGEJO__DATABASE__PASSWD
-            secretKeyRef:
-              name: forgejo-db
-              key: password
+          - name: FORGEJO__DATABASE__PASSWD
+            valueFrom:
+              secretKeyRef:
+                name: forgejo-db
+                key: password
         admin:
           existingSecret: forgejo-admin
           email: admin@git.davidsouther.com.127.0.0.1.nip.io
