@@ -28,3 +28,7 @@ spec:
         login: true
         passwordSecret:
           name: keycloak-db
+      - name: forgejo
+        login: true
+        passwordSecret:
+          name: forgejo-db
