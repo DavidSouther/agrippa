@@ -28,6 +28,15 @@
 # Disabled here: Loki is consumed only by Grafana and Alloy inside the
 # cluster, so the extra Deployment/Service is unneeded footprint -- Grafana's
 # and Alloy's targets go straight to the singleBinary Service ("loki":3100).
+#
+# chunksCache and resultsCache (both memcached-based, both enabled: true by
+# default regardless of deploymentMode) sized themselves to 9830Mi and 1229Mi
+# of memory requests respectively -- confirmed live: this alone consumed
+# ~11Gi of the single k3d node's ~15.6Gi allocatable memory, starving Step 2's
+# Mimir pods into `Insufficient memory` Pending. Disabled here: these are
+# optional query/chunk-fetch performance caches sized for production request
+# volume, not required for correctness on a low-volume single-tenant local
+# dev Loki.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
@@ -58,4 +67,8 @@ helmCharts:
           type: filesystem
         useTestSchema: true
       gateway:
+        enabled: false
+      chunksCache:
+        enabled: false
+      resultsCache:
         enabled: false
