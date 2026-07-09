@@ -1,5 +1,4 @@
-# Wave 5: the declarative KeycloakRealmImport for the `agrippa` dev realm
-# (spec lands Step 4).
+# Wave 5: the declarative KeycloakRealmImport for the `agrippa` dev realm.
 apiVersion: k8s.keycloak.org/v2beta1
 kind: KeycloakRealmImport
 metadata:
@@ -7,3 +6,10 @@ metadata:
   namespace: keycloak
   annotations:
     argocd.argoproj.io/sync-wave: "5"
+spec:
+  keycloakCRName: keycloak
+  realm:
+    id: agrippa
+    realm: agrippa
+    enabled: true
+    displayName: Agrippa

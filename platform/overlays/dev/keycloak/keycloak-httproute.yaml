@@ -1,5 +1,6 @@
 # Wave 5: routes the Keycloak dev host through the shared Gateway to
-# keycloak-service (spec lands Step 4).
+# keycloak-service. Plain-HTTP backend -- no DestinationRule, since
+# spec.http.httpEnabled: true (the Keycloak CR) serves HTTP internally.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -7,3 +8,20 @@ metadata:
   namespace: keycloak
   annotations:
     argocd.argoproj.io/sync-wave: "5"
+spec:
+  parentRefs:
+    - name: agrippa-gateway
+      namespace: istio-ingress
+      sectionName: https
+  hostnames:
+    - auth.127.0.0.1.nip.io
+  rules:
+    # `matches` authored explicitly -- see argocd-httproute.yaml's identical note
+    # on ArgoCD's pre-sync diff not replicating this nested-array structural default.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: keycloak-service
+          port: 8080
