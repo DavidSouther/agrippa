@@ -21,11 +21,16 @@
 # flagsmith-api:8000, flagsmith-frontend:8080 -- matches the design's
 # "expected" guess exactly; no correction needed for Step 4's HTTPRoute.
 #
-# BUILD-TIME FINDING: the readinessProbe's default `path` is
-# `/health/readiness/` (django-health-check, DB-gated), not the design's
-# assumed bare `/health` -- confirmed via values.yaml `api.readinessProbe`.
-# Corrected in Step 4's HTTPRoute and Step 5's tests/feature-flags.bats
-# HEALTH_PATH default.
+# BUILD-TIME FINDING: the chart's own readinessProbe uses
+# `/health/readiness/` (django-health-check, DB-gated) rather than the
+# design's assumed bare `/health` -- confirmed via values.yaml
+# `api.readinessProbe`. That turned out not to require any correction: a
+# live in-cluster curl (recorded in Step 4's httproute.yaml) found the
+# API's bare `/health` is *also* a DB-gated django-health-check view
+# (same DatabaseBackend/MigrationsHealthCheck as `/health/readiness/`),
+# so the design's original `/health` assumption and
+# tests/feature-flags.bats' existing HEALTH_PATH default both stand
+# unchanged.
 #
 # BUILD-TIME FINDING: no `skipTests: true` workaround is needed here (unlike
 # Valkey/Forgejo) -- this chart's `tests.enabled` already defaults to
