@@ -6,7 +6,7 @@
 **User story:** Given the bootstrapped `agrippa-dev` cluster (Features 1-6) with this Flagsmith content committed and reconciled by ArgoCD into the `platform` layer — the Flagsmith Helm release (`api` + `frontend`) in the `flagsmith` namespace, wired via `databaseExternal` to the shared CNPG `postgres` Cluster's own `flagsmith` database/role, its three KSOPS-sealed credentials, its `Database` CR, and its hand-authored `HTTPRoute` at `flagsmith.127.0.0.1.nip.io` — when an operator requests `https://flagsmith.127.0.0.1.nip.io/` and `.../health` through the k3d `:443` host port-map, then the admin UI is served through the shared Istio Gateway with a local-CA TLS cert, and the API `/health` endpoint returns 200, transitively proving the Django app is up and its connection to the shared Postgres database works.
 
 **Steps:**
-- [ ] Step 0: API surface area (file layout, `apps/platform.yaml` SSA seam)
+- [x] Step 0: API surface area (file layout, `apps/platform.yaml` SSA seam)
 - [ ] Step 1: Wave `-10` — the `flagsmith` namespace
 - [ ] Step 2: Wave `-5` — the three sealed credentials and the `flagsmith` `Database` CR
 - [ ] Step 3: Wave `0` — the Flagsmith Helm release

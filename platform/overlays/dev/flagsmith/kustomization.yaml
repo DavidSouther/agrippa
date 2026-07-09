@@ -1,0 +1,9 @@
+# The `flagsmith` component of the `platform` layer. No blanket `namespace:`
+# transformer here -- the Database CR must carry metadata.namespace: storage
+# while everything else is in `flagsmith`, so each authored CR declares its
+# own metadata.namespace explicitly, exactly as keycloak/forgejo's own
+# precedent.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: []   # namespace.yaml (Step 1), ../../../../secrets/dev/platform/flagsmith
+                 # + database.yaml (Step 2), helm/ (Step 3), httproute.yaml (Step 4)

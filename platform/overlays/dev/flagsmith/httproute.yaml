@@ -1,0 +1,9 @@
+# Wave 5: routes the flagsmith dev host through the shared Gateway to the
+# API/frontend Services. Name-only stub; spec lands Step 4.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: flagsmith
+  namespace: flagsmith
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"

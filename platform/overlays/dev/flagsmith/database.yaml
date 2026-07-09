@@ -1,0 +1,11 @@
+# Wave -5 (not the design's literal wave-5 grouping -- see Step 2's note in
+# plan.md, reviewed and cleared: the Database CR must exist before the
+# wave-0 chart's Deployment ever connects to it, matching the Auth/Git-hosting
+# siblings' own resequencing precedent). Name-only stub; spec lands Step 2.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: flagsmith
+  namespace: storage
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
