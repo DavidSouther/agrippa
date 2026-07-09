@@ -25,25 +25,24 @@
 # template semantics -- ArgoCD doesn't understand helm.sh/hook and would
 # otherwise plain-apply it). skipTests excludes it, mirroring Valkey.
 #
-# BUILD-TIME FINDING (research:public, forgejo.org env-to-ini docs):
-# FORGEJO__DATABASE__PASSWD is the confirmed env-var spelling (Forgejo's
-# own FORGEJO__<SECTION>__<KEY> convention, not Gitea's legacy GITEA__
-# prefix) -- matches the design's assumption exactly, no correction needed.
-#
-# BUILD-TIME CORRECTION (live-verified the hard way -- a real ArgoCD
-# ServerSideApply failure, not caught by `kustomize build`/`helm template`
-# rendering cleanly): `gitea.additionalConfigFromEnvs` entries are spliced
-# **directly** into the init container's `env:` list
-# (templates/gitea/deployment.yaml), so each entry must already be a
-# well-formed core/v1 EnvVar object -- `name` + `valueFrom.secretKeyRef`,
-# exactly the chart's own README example -- NOT the design/plan's assumed
-# `envName`/`secretKeyRef` shorthand (a Gitea-chart-ism that does not exist
-# in this schema). `helm template`/kustomize's local render doesn't
-# validate against the K8s OpenAPI schema, so this only surfaced live:
-# ArgoCD's ServerSideApply (Step 0's seam) rejected the Deployment with
-# "field not declared in schema" on
-# `initContainers[name="init-app-ini"].env[name=""].envName`. Corrected to
-# `name`/`valueFrom.secretKeyRef` below.
+# BUILD-TIME FINDING on `gitea.additionalConfigFromEnvs` (two parts, one
+# decision): the env-var name FORGEJO__DATABASE__PASSWD is confirmed
+# correct (research:public, forgejo.org env-to-ini docs -- Forgejo's own
+# FORGEJO__<SECTION>__<KEY> convention, not Gitea's legacy GITEA__ prefix;
+# matches the design's assumption). Its wrapping SHAPE needed a correction,
+# found the hard way -- a real live ArgoCD ServerSideApply failure, not
+# caught by `kustomize build`/`helm template` rendering cleanly:
+# `additionalConfigFromEnvs` entries are spliced **directly** into the init
+# container's `env:` list (templates/gitea/deployment.yaml), so each entry
+# must already be a well-formed core/v1 EnvVar object -- `name` +
+# `valueFrom.secretKeyRef`, exactly the chart's own README example -- NOT
+# the design/plan's assumed `envName`/`secretKeyRef` shorthand (a
+# Gitea-chart-ism that does not exist in this schema). `helm
+# template`/kustomize's local render doesn't validate against the K8s
+# OpenAPI schema, so this only surfaced live: ArgoCD's ServerSideApply
+# (Step 0's seam) rejected the Deployment with "field not declared in
+# schema" on `initContainers[name="init-app-ini"].env[name=""].envName`.
+# Corrected to `name`/`valueFrom.secretKeyRef` below.
 #
 # BUILD-TIME FINDING (live-verified via chart template inspection): the
 # admin existingSecret's expected keys are literally `username`/`password`
