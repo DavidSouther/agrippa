@@ -1,4 +1,12 @@
-# Step 0 skeleton (name-only stub, no spec); real content lands Step 2.
+# Wave 0: davidsouther.com, David's real personal site (github.com/davidsouther/
+# resume, built by scripts/workloads-build.sh into the resume:dev image and
+# `k3d image import`-ed into the node's containerd -- imagePullPolicy: Never
+# means this Deployment can only ever schedule against an image already
+# present there; `mise run workloads:build` must be (re-)run against this
+# exact cluster before this syncs, or the pod sits in ErrImageNeverPull.
+# Modest explicit resources -- a static nginx pod is cheap, and the cluster's
+# cumulative resource pressure (every prior platform-services build hit real
+# scheduling/OOMKill issues) makes conservative requests the right default.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,3 +14,33 @@ metadata:
   namespace: resume
   annotations:
     argocd.argoproj.io/sync-wave: "0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: resume
+  template:
+    metadata:
+      labels:
+        app: resume
+    spec:
+      containers:
+        - name: resume
+          image: resume:dev
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 80

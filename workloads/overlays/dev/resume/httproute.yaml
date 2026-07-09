@@ -1,4 +1,8 @@
-# Step 0 skeleton (name-only stub, no spec); real content lands Step 2.
+# Wave 0: routes the personal-site dev host through the shared Gateway to
+# the resume Service. `matches` authored explicitly -- Networking's own
+# live-hit trap (an omitted `matches:` left `core` permanently OutOfSync);
+# avoided here by design fiat, same as every other HTTPRoute in this repo
+# (argocd-httproute.yaml, keycloak/forgejo/flagsmith's own httproute.yaml).
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -6,3 +10,18 @@ metadata:
   namespace: resume
   annotations:
     argocd.argoproj.io/sync-wave: "0"
+spec:
+  parentRefs:
+    - name: agrippa-gateway
+      namespace: istio-ingress
+      sectionName: https
+  hostnames:
+    - davidsouther.com.127.0.0.1.nip.io
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: resume
+          port: 80

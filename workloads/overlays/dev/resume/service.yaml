@@ -1,4 +1,5 @@
-# Step 0 skeleton (name-only stub, no spec); real content lands Step 2.
+# Wave 0: ClusterIP fronting the resume Deployment's pods for the HTTPRoute
+# to target.
 apiVersion: v1
 kind: Service
 metadata:
@@ -6,3 +7,10 @@ metadata:
   namespace: resume
   annotations:
     argocd.argoproj.io/sync-wave: "0"
+spec:
+  type: ClusterIP
+  selector:
+    app: resume
+  ports:
+    - port: 80
+      targetPort: 80
