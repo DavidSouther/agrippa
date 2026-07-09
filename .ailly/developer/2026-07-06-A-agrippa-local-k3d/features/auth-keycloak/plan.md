@@ -11,7 +11,7 @@
 - [x] Step 2: Wave `-5` — the two-namespace `keycloak-db` credential, `keycloak-admin`, the `managed.roles[]` append, and the `keycloak` `Database` CR
 - [x] Step 3: Wave `0` — the `Keycloak` CR
 - [x] Step 4: Wave `5` — the `KeycloakRealmImport`, the HTTPRoute, and the Gateway cert's `dnsNames` append
-- [ ] Step 5: Full GREEN — the discovery-endpoint + local-CA-TLS proof, and the regression sweep
+- [x] Step 5: Full GREEN — the discovery-endpoint + local-CA-TLS proof, and the regression sweep
 
 **Libraries & Skills (carried forward from `design.md`/`research.md`; load before each build step):**
 
@@ -555,6 +555,8 @@ test "no regression to earlier harness":
 - Edge case: `bats tests/networking.bats` re-run here is the actual regression proof that this feature-step's `core/overlays/dev/gateway-cert.yaml` `dnsNames` append did not disturb `argocd.127.0.0.1.nip.io`'s own reachability or cert issuance.
 - Edge case: re-running `bats tests/auth.bats` a second time back-to-back must not error or disrupt the permanent `agrippa` realm/`keycloak` database — ArgoCD's `selfHeal` should leave an already-Synced/Healthy `platform` alone, and the discovery-endpoint/TLS checks are read-only.
 - Edge case: `mise run test:static`'s kubeconform/conftest pass does not walk `platform/overlays/dev/keycloak/`, `core/`, or `storage/` (only `apps/`, `charts/*/rendered/`, and `secrets/`) — do not assume `test:push` exercises Steps 1-4's new YAML; ArgoCD's own live reconcile and this bats suite are the only validators of that content, exactly as both completed siblings' Step 5 recorded.
+
+**Build-time finding (pre-existing, unrelated to this feature-step -- not fixed here):** `bats tests/rotate-keys.bats` fails on this build (`not ok 1`, THEN 4 -- decrypting the re-encrypted secret under the new key). Root-caused: `scripts/rotate-keys.sh` runs Stage 4 (`sops updatekeys`, re-encrypting already-committed secrets to match `.sops.yaml`'s current recipient) *before* Stage 5 (which writes the new recipient into `.sops.yaml`) -- so Stage 4's `sops updatekeys` still sees the OLD recipient and no-ops ("file already up to date"), leaving the secret decryptable only under the old key. Confirmed pre-existing and untouched by this feature-step: `git diff 7331eb7..HEAD -- scripts/rotate-keys.sh tests/rotate-keys.bats mise.toml` is empty, and the file was last touched in `a9cdfbc` (Feature 0), long before Auth/Keycloak. Out of scope for this feature-step's own regression sweep (this suite is not in the coordinator's required regression list for this build); left for a separate bugfix.
 
 **Implementation Outline**
 
