@@ -21,15 +21,27 @@ COPY . .
 RUN npm ci && npm run build
 
 # Stage 2: a minimal static server. docs/ is the jiffies SSG's flat output --
-# build-verified: /blog is a real directory (docs/blog/index.html), so nginx's
-# directory-index behavior serves it under a plain `try_files` rule with no
-# extra rewrite needed.
+# build-verified: /blog is a real directory (docs/blog/index.html), so
+# nginx's directory-index behavior 301-redirects /blog -> /blog/ under a
+# plain `try_files` rule with no extra rewrite needed.
+#
+# BUILD-TIME FINDING: TLS is terminated upstream at the shared Istio Gateway
+# (mode: Terminate); this container only ever speaks plain HTTP, and its
+# HTTPRoute is bound to the Gateway's `https` listener only (no `http`
+# listener attachment) -- so nginx's default *absolute* directory redirect
+# (Location: http://<host>/blog/, scheme hardcoded from its own $scheme,
+# which is always "http" here) sends the client to a plain-HTTP request that
+# has no matching route and 404s at the Gateway. `absolute_redirect off`
+# makes nginx emit a scheme/host-less relative Location (`/blog/`), so the
+# client's own follow-up request reuses whatever scheme/host it already
+# used -- correct regardless of where TLS is terminated.
 FROM nginx:alpine
 COPY --from=build /src/docs /usr/share/nginx/html
 RUN <<'EOF' cat > /etc/nginx/conf.d/default.conf
 server {
     listen 80;
     root /usr/share/nginx/html;
+    absolute_redirect off;
 
     location = /healthz {
         return 200;

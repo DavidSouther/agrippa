@@ -23,12 +23,18 @@ RUN npm ci && npm run build
 # Stage 2: a minimal static server. No /healthz here -- only the personal
 # site carries one (parent design decision 4); trips' own liveness/readiness
 # probe targets plain `/`.
+#
+# `absolute_redirect off` matches resume.Dockerfile's own build-time finding:
+# TLS terminates upstream at the shared Istio Gateway and this container's
+# HTTPRoute binds only the `https` listener, so any directory-index redirect
+# nginx emits must be scheme/host-less (relative) or it 404s at the Gateway.
 FROM nginx:alpine
 COPY --from=build /src/docs /usr/share/nginx/html
 RUN <<'EOF' cat > /etc/nginx/conf.d/default.conf
 server {
     listen 80;
     root /usr/share/nginx/html;
+    absolute_redirect off;
 
     location / {
         try_files $uri $uri/ $uri.html =404;
