@@ -1,6 +1,114 @@
-# Wave 0: the Flagsmith chart lands here -- Step 3 skeleton.
+# Wave 0: the official Flagsmith chart, against the shared postgres
+# Cluster's flagsmith database/role (both already live -- Step 2, wave -5)
+# and the sealed database-url/secret-key credentials (also Step 2).
+#
+# BUILD-TIME FINDING (research:public, live-verified against the pulled
+# 0.82.0 chart's Chart.yaml/values.yaml/templates): the design/plan's
+# valuesInline sketch used `postgresql.enabled: false` to disable the
+# chart's bundled dev Postgres subchart. That key does not gate anything on
+# its own -- the subchart's Helm dependency `condition` is
+# `postgresql.enabled,devPostgresql.enabled` (an OR of the two), and
+# `devPostgresql.enabled` defaults to `true` in this chart's own
+# values.yaml. Setting only `postgresql.enabled: false` would leave the
+# bundled bitnami/postgresql subchart (and its own PVC/Deployment/Secret)
+# enabled by the still-true default. Corrected below to the key that
+# actually controls it: `devPostgresql.enabled: false`.
+#
+# BUILD-TIME FINDING: Service names/ports confirmed via
+# templates/service-api.yaml / service-frontend.yaml +
+# _helpers.tpl's flagsmith.fullname (releaseName "flagsmith" contains the
+# chart name "flagsmith", so fullname collapses to the bare release name):
+# flagsmith-api:8000, flagsmith-frontend:8080 -- matches the design's
+# "expected" guess exactly; no correction needed for Step 4's HTTPRoute.
+#
+# BUILD-TIME FINDING: the readinessProbe's default `path` is
+# `/health/readiness/` (django-health-check, DB-gated), not the design's
+# assumed bare `/health` -- confirmed via values.yaml `api.readinessProbe`.
+# Corrected in Step 4's HTTPRoute and Step 5's tests/feature-flags.bats
+# HEALTH_PATH default.
+#
+# BUILD-TIME FINDING: no `skipTests: true` workaround is needed here (unlike
+# Valkey/Forgejo) -- this chart's `tests.enabled` already defaults to
+# `false`, so no helm.sh/hook: test Pod renders regardless.
+#
+# BUILD-TIME FINDING: this chart's templates explicitly stamp
+# metadata.namespace via the `flagsmith.namespace` helper (defaulting to
+# `.Release.Namespace`) on every object our config actually renders, so the
+# kustomize#6058 helmCharts-namespace-stamping regression that hit Valkey
+# does NOT reproduce here (same conclusion Forgejo's build reached for its
+# own chart) -- no scoped `patches:` workaround needed; live-confirmed below.
+#
+# BUILD-TIME FINDING: `DJANGO_ALLOWED_HOSTS` is hardcoded to `'*'` in this
+# chart's own `_api_environment.yaml` (not a values-exposed key) -- the
+# design's flagged allowed-hosts risk does not apply; no override needed.
+#
+# BUILD-TIME FINDING: no bundled influxdb/analytics subchart is enabled by
+# this chart's own defaults (`influxdbExternal.enabled: false`,
+# `UsePostgresForAnalytics.enabled: false` both default off) -- confirmed,
+# no explicit disable needed.
+#
+# BUILD-TIME FINDING (caught by a real local `--enable-helm` render, not by
+# reading values.yaml alone): `hpa.sse.enabled` defaults to `true` even
+# though `sse.enabled` defaults to `false` -- an inconsistent chart default.
+# With sse disabled, no `flagsmith-sse` Deployment ever renders, so the
+# still-rendered `flagsmith-sse-hpa` HorizontalPodAutoscaler targets a
+# nonexistent scaleTargetRef and would sit in a permanent
+# `AbleToScale: False` condition -- exactly the shape of resource ArgoCD's
+# own HPA health check reports as Degraded. `hpa.sse.enabled: false` added
+# explicitly below to suppress it.
+#
+# `resources:` scoped to a dev-appropriate footprint proactively (the same
+# precedent Auth's Keycloak-operator and Git-hosting's Forgejo builds both
+# applied), using this chart's own commented-out example values --
+# node headroom is ample, but an unbounded request-less container is still
+# a noisy-neighbor risk on this single-node dev cluster's growing footprint
+# (Istio, cert-manager, metallb, CNPG, Valkey, the full LGTM stack,
+# Keycloak, Forgejo, now Flagsmith).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
   argocd.argoproj.io/sync-wave: "0"
-helmCharts: []   # the flagsmith chart lands Step 3
+helmCharts:
+  - name: flagsmith
+    repo: https://flagsmith.github.io/flagsmith-charts/
+    version: 0.82.0
+    releaseName: flagsmith
+    namespace: flagsmith
+    valuesInline:
+      devPostgresql:
+        enabled: false
+      databaseExternal:
+        enabled: true
+        urlFromExistingSecret:
+          enabled: true
+          name: flagsmith-database-url
+          key: DATABASE_URL
+      api:
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 512Mi
+        secretKeyFromExistingSecret:
+          enabled: true
+          name: flagsmith-secret-key
+          key: SECRET_KEY
+        bootstrap:
+          enabled: true
+          adminEmail: admin@agrippa.local
+          organisationName: agrippa
+          projectName: agrippa
+      frontend:
+        enabled: true
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            memory: 256Mi
+      sse:
+        enabled: false
+      hpa:
+        sse:
+          enabled: false
