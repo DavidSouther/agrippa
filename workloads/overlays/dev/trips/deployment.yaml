@@ -1,0 +1,8 @@
+# Step 0 skeleton (name-only stub, no spec); real content lands Step 3.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trips
+  namespace: trips
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"

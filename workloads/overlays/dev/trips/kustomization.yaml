@@ -1,0 +1,7 @@
+# The `trips` component of the `workloads` layer. Step 0: only the
+# Namespace lands; deployment.yaml/service.yaml/httproute.yaml are named-only
+# stubs Step 3 fills in and appends here.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
