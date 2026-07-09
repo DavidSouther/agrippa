@@ -266,17 +266,31 @@ test.
   Mitigated by an nginx clean-URL config in the serving stage, and by the feature
   test following redirects (`curl -kL`) so it asserts the rendered blog index
   regardless of a trailing-slash bounce.
-- **ArgoCD fetching the submodules over the network at reconcile time.** ArgoCD's
-  repo-server fetches submodules by default when cloning, but the live path (the
-  plain-YAML overlays) references **none** of the submodule content, and the
-  images are already imported locally. The fetch is unnecessary either way. Because
-  `trips` is **private** (see § The git submodules), ArgoCD's default submodule
-  fetch will predictably `401` on it unless the repo-server carries a
-  `github.com/davidsouther/trips` credential, so this is a determined auth failure,
-  not merely a `github reachability blip`. Proactively disable submodule fetch for
-  the `workloads` Application (the plain-YAML render references none of the submodule
-  content, so it is unaffected), rather than waiting for it to bite. Confirm at build
-  whether the repo-server 401s the whole clone or logs and proceeds.
+- **ArgoCD fetching the submodules over the network at reconcile time — CONFIRMED
+  fatal, and cluster-wide, not `workloads`-scoped.** ArgoCD's repo-server runs
+  `git submodule update --init --recursive` on every checkout of the shared
+  `agrippa` repoURL — not per-Application — so committing `.gitmodules` breaks
+  manifest generation for **all seven** Applications (`root`, `core`, `storage`,
+  `platform`, `observability`, `workloads`, `argocd` itself), not just this
+  feature-step's own layer, the moment the private `trips` submodule 401s an
+  unauthenticated fetch. No per-Application "skip submodules" setting exists
+  upstream (argoproj/argo-cd#3799, open/unimplemented) — the plan-gate reviewer
+  found this and correctly escalated it as out of this step's own recorded scope
+  (a global, cluster-wide ArgoCD/`core`-adjacent config change). **Resolved by
+  the coordinator (2026-07-09), applied and live-verified**: added
+  `reposerver.enable.git.submodule: "false"` to `argocd-cmd-params-cm` via a new
+  patch in `apps/platform/argocd/kustomization.yaml` — this key is already wired
+  to the repo-server's `ARGOCD_GIT_MODULES_ENABLED` env var in the pinned v3.4.4
+  install manifest (confirmed live via `kubectl get deployment
+  argocd-repo-server -o yaml`), so no other change was needed. Applied, the
+  `argocd` Application self-reconciled, the repo-server was restarted to pick up
+  the env change (ConfigMap-sourced env vars are not live-reloaded), and all
+  seven Applications were reconfirmed Synced/Healthy afterward. Safe because the
+  live path (the plain-YAML overlays) references **none** of the submodule
+  content — the images are already built and imported locally by
+  `workloads:build` before ArgoCD ever sees the manifests. This lands as its own
+  prerequisite commit, **before** Step 1's `.gitmodules` (see § Cross-step
+  touches and the plan's corrected step order).
 - **Cumulative single-node resource pressure** (the Flagsmith OOMKill, `db93c91`,
   is live evidence). Two static-nginx pods are cheap, but sized conservatively
   (see § The Deployments). If either will not schedule, check `kubectl describe
@@ -524,6 +538,13 @@ maintained deliberately.
 
 ### Cross-step touches (summary)
 
+- **`apps/platform/argocd/kustomization.yaml`** (the shared ArgoCD install
+  patch, `core`/`platform`-adjacent, owned by the already-completed
+  `gitops-argocd` feature-step): add `reposerver.enable.git.submodule: "false"`
+  to the `argocd-cmd-params-cm` patch. **Already applied and live-verified by
+  the coordinator (2026-07-09)** — see § Failure modes — as a prerequisite
+  landing before this step's own `.gitmodules` commit; no further action needed
+  here.
 - **`workloads/overlays/dev/kustomization.yaml`**: replace `resources: []` with
   `resources: [resume, trips]`. This step owns this file entirely (it is the
   `workloads` layer's own root, not a shared multi-sibling list).
@@ -812,10 +833,16 @@ file (§ Cross-step touches). This is not escalated: (a) reversible, (b) in scop
 works for the authenticated operator; do not require David to change a repo's
 visibility). Two body corrections were applied: § The git submodules now states
 `resume` public / `trips` private with the auth consequence, and the ArgoCD
-submodule-fetch failure mode is upgraded from "watch, do not pre-optimize" to
-"proactively disable submodule fetch on the `workloads` Application" because a
-private `trips` makes the fetch a determined `401`, not a mere reachability blip
-(the plain-YAML live render references no submodule content, so it is unaffected).
+submodule-fetch failure mode was upgraded from "watch, do not pre-optimize" to
+"proactively disable submodule fetch" because a private `trips` makes the fetch
+a determined `401`, not a mere reachability blip (the plain-YAML live render
+references no submodule content, so it is unaffected). **This reviewer's own
+"disable submodule fetch for the `workloads` Application" framing was itself
+imprecise** — the plan-gate reviewer (dispatched next) found no per-Application
+disable exists upstream (argoproj/argo-cd#3799); only a global repo-server
+toggle does, and the fetch happens per-repoURL clone, breaking all seven
+Applications, not just `workloads`, the moment `.gitmodules` lands. See §
+Failure modes above for the corrected, coordinator-applied fix.
 An unauthenticated third-party clone would `401` on `trips`; that is a
 documentation-and-CI concern parked to the deferred CI/registry seams, not a blocker
 for this local, operator-run feature-step.
