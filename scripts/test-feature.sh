@@ -75,13 +75,17 @@ fi
 # `platform` layer (the Flagsmith Helm release + its HTTPRoute/Database/
 # sops-encrypted credentials, reached through the shared Istio Gateway) against
 # the long-lived agrippa-dev cluster via ArgoCD, not this throwaway feature
-# cluster; rotate-keys.bats -> a standalone sops/age mechanism
+# cluster; workloads.bats -> drives the GitOps-reconciled `workloads` layer (the
+# resume + trips static sites reached through the shared Istio Gateway, their
+# images built + imported by `mise run workloads:build`) against the long-lived
+# agrippa-dev cluster via ArgoCD, not this throwaway feature cluster;
+# rotate-keys.bats -> a standalone sops/age mechanism
 # check with a stubbed Bitwarden, needs no cluster at all).
 probe_suites=()
 for f in tests/*.bats; do
   [ -e "$f" ] || continue
   case "$(basename "$f")" in
-    agrippa.bats|harness.bats|preflight.bats|cluster-core.bats|gitops.bats|networking.bats|storage.bats|git-hosting.bats|auth.bats|observability.bats|feature-flags.bats|rotate-keys.bats) continue ;;
+    agrippa.bats|harness.bats|preflight.bats|cluster-core.bats|gitops.bats|networking.bats|storage.bats|git-hosting.bats|auth.bats|observability.bats|feature-flags.bats|workloads.bats|rotate-keys.bats) continue ;;
   esac
   probe_suites+=("$f")
 done
