@@ -31,8 +31,8 @@ Closing Bell critical task 4.
 - [x] Step 1: Wave `-10`/`0` (part) — namespace, Loki, Tempo
 - [x] Step 2: Wave `0` (part) — Mimir
 - [x] Step 3: Wave `5` (part) — Grafana
-- [ ] Step 4: Wave `5` (rest) — Alloy, the Grafana `HTTPRoute`, the gateway-cert SAN
-- [ ] Step 5: Full GREEN and the regression sweep
+- [x] Step 4: Wave `5` (rest) — Alloy, the Grafana `HTTPRoute`, the gateway-cert SAN
+- [x] Step 5: Full GREEN and the regression sweep
 
 **Libraries & Skills (carried forward from `design.md`/`research.md`; load
 before each build step):**
