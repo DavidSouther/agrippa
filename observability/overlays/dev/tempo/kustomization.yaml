@@ -1,6 +1,25 @@
-# Wave 0: Tempo (single-binary chart, not tempo-distributed). Chart lands Step 1.
+# Wave 0: Tempo (single-binary "tempo" chart, not tempo-distributed; -target=all
+# monolithic mode is the chart's only mode). Chart moved to
+# grafana-community.github.io/helm-charts (research:public, re-verified live
+# at build, confirming this feature-step's own research prediction) --
+# version 2.2.3, the newest release as of this build.
+#
+# tempo.storage.trace.backend: local (with local wal/chunk paths) is already
+# the chart's own default -- kept implicit; only persistence needs an
+# explicit override. persistence.enabled defaults to false (StatefulSet uses
+# an emptyDir), so it and its storageClassName are both set here for a
+# local-path PVC.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
   argocd.argoproj.io/sync-wave: "0"
-helmCharts: []
+helmCharts:
+  - name: tempo
+    repo: https://grafana-community.github.io/helm-charts
+    version: 2.2.3
+    releaseName: tempo
+    namespace: observability
+    valuesInline:
+      persistence:
+        enabled: true
+        storageClassName: local-path
