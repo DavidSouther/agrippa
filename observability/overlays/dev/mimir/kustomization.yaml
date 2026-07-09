@@ -1,0 +1,6 @@
+# Wave 0: mimir-distributed at one replica per component. Chart lands Step 2.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "0"
+helmCharts: []
