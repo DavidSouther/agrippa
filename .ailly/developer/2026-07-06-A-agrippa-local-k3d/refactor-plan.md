@@ -1,0 +1,3 @@
+# Refactor Plan -- feature-flags-flagsmith build
+
+- [x] **Stale/contradictory comment** `platform/overlays/dev/flagsmith/helm/kustomization.yaml:24-28` -- the Step 3 comment claims the readinessProbe path finding (`/health/readiness/`) meant the design's assumed bare `/health` needed correcting in the HTTPRoute/test. Step 4's later, more precise live finding (recorded in `httproute.yaml`) established that bare `/health` is *itself* a DB-gated endpoint and needs no correction at all. Left as-is, the two comments contradict each other. Resolution: correct the Step 3 comment to state the accurate, final conclusion.
