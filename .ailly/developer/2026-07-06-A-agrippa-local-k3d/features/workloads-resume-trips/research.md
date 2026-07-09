@@ -1,6 +1,6 @@
 # Research: Workloads (resume + trips)
 
-*Draft 2026-07-09*
+*Reviewed 2026-07-09*
 
 > Feature-step research (feature-loop shape) inside the Project-Shape session
 > `2026-07-06-A-agrippa-local-k3d`. This is **Feature 9: Workloads (resume +
@@ -380,35 +380,115 @@ Answered by this research:
   config (parent design's resolved decision 4) — no change needed to the
   resume repo itself.
 
-Left open for the design phase (not resolved by research, deliberately):
+### Resolved by the long-loop reviewer (2026-07-09)
 
-- **(h) The chart-composition mechanism** — local `helmCharts:`/`chartHome`
-  inflation (known-flaky per a closed kustomize issue, re-verify live
-  against the pinned 5.8.1 before trusting it), per-workload native-ArgoCD-
-  Helm `Application`s (deviates from the "one Application per layer" shape),
-  or plain-YAML `resources:` with the chart kept parallel for
-  `test:chart` only. This is the single highest-leverage open item for the
-  design phase to spend its own research/prototyping time on, ideally with
-  a live `kustomize build --enable-helm` smoke test before committing to
-  chart internals.
-- **(i) Whether to reuse `@davidsouther/jiffies`'s own Node static server
-  instead of nginx for stage 2** — named as a real alternative (Falsification
-  item 3), not recommended, pending confirmation of whether it offers an
-  equivalent to nginx's one-line healthz mechanism.
-- **(j) Exact resource `requests`/`limits` for the two serving containers**
-  — cheap in absolute terms (a static-file server), but this cluster has
-  real, evidenced scheduling pressure (`db93c91`'s Flagsmith OOMKill fix);
-  design should set explicit, modest values proactively rather than shipping
-  request-less containers, following the forgejo chart's own "noisy-neighbor
-  risk" discipline, but the exact numbers are a design-phase artifact
-  decision.
-- **(k) Exact naming** — `tests/workloads.bats` vs. an alternative, the
-  `workloads:build` task's exact name and script filename, and the two
-  submodule paths under `workloads/` (e.g. `workloads/resume/`,
-  `workloads/trips/`, vs. some other layout) — small, low-risk naming
-  choices better made with the chart-composition question (h) already
-  settled, since (h)'s answer may constrain where the submodule checkouts
-  need to sit relative to each chart's own build context.
+Items (h)-(k) below were the "left open, for this feature-step's own design
+phase to settle" slot. A separately dispatched research-and-decide reviewer
+read this artifact cold and resolved them at the research draft gate. For the
+one flagged highest-leverage item (h) it ran the live `kustomize build
+--enable-helm` smoke test this research itself recommended (§ Falsification
+item 4), against the pinned kustomize `5.8.1` and the live `k3d-agrippa-dev`
+cluster (`workloads` Application `Synced/Healthy`, overlay still the
+`resources: []` placeholder; single-node `1/1` server, `0` agents), and
+checked each item against the repo conventions (`DEVELOPMENT.md`, parent
+`design.md`/`plan.md`, the `forgejo` sibling's `chart/`+plain-YAML
+composition, and ArgoCD's live `argocd-cm` `kustomize.buildOptions`). The
+"Answered by this research" items (a)-(g) above were re-verified and stand;
+(e) was re-confirmed live (`git show a9cdfbc -- tests/agrippa.bats`; current
+tree carries no `GESTALT_ENV`, the trips `dev` branch, and the `-k` flags;
+`git diff HEAD` empty). Each item was decided to the conservative, reversible
+default. No escalation trigger (irreversible, out of recorded scope, or
+underdetermined) fired, so this research draft gate is cleared (marker now
+`*Reviewed 2026-07-09*`).
+
+**(h) The chart-composition mechanism. Decided: consume both workloads as
+plain kustomize `resources:` YAML (Deployment / Service / HTTPRoute /
+Certificate) under `workloads/overlays/dev/<workload>/`, composed by the
+existing single `apps/workloads.yaml` Application — NOT via `helmCharts:`
+inflation — and keep `charts/resume/` and `charts/trips/` as real,
+`helm-unittest`-tested charts at the repo root, as the packaging artifact for
+the deferred prod/registry-push path rather than the local GitOps render
+path.** Live smoke-test findings against pinned kustomize 5.8.1: (1) local
+`helmCharts:` inflation of an in-repo chart *does* work — the `#5818`
+"`chartHome` silently ignored when `repo` omitted" bug this research flagged
+does **not** reproduce in 5.8.1: a `helmGlobals.chartHome` +
+`helmCharts:[{name, releaseName}]` render (no `repo`, no `version`) succeeds,
+honors a non-default `chartHome`, and applies `valuesInline` overrides (the
+`overlays/dev` replica-reduction path), so the research's stated primary risk
+is retired. (2) But a second, decisive constraint the research did not surface
+blocks the convention-correct layout: kustomize's default load restrictor
+(`LoadRestrictionsRootOnly`, which ArgoCD uses) **refuses a `chartHome` that
+points above the kustomization directory**. With `charts/<chart>/` at the repo
+root (the `DEVELOPMENT.md` convention) and ArgoCD building from the deep
+`workloads/overlays/dev`, the render fails hard: `Error: security; file
+'.../charts/resume/values.yaml' is not in or below
+'.../workloads/overlays/dev/...'`. The only ways to make repo-root-chart +
+deep-overlay `helmCharts:` work are (a1) add `--load-restrictor
+LoadRestrictionsNone` to ArgoCD's cluster-wide `kustomize.buildOptions`
+(today `--enable-alpha-plugins --enable-exec --enable-helm`,
+`apps/platform/argocd/kustomization.yaml`) — a security-posture change to the
+ArgoCD/`core` layer this feature-step does not own, weakening every
+Application's kustomize sandbox — or (a2) relocate the chart to
+`workloads/overlays/dev/<workload>/chart/charts/<workload>/` (at-or-below the
+overlay, which does render with no flag), violating `DEVELOPMENT.md`'s
+`charts/<chart>/` convention and colliding with the `./charts` dir kustomize
+itself writes fetched charts into. Both disqualify local `helmCharts:` as the
+conservative default. Option (b) native ArgoCD Helm-from-git respects the
+repo-root chart and is single-source-of-truth, but forces the `workloads`
+layer off the "single `apps/workloads.yaml` composes `workloads/overlays/dev`
+via kustomize" shape (`research/codebase.md` confirmed that Application needs
+*no* change) onto per-workload Applications — more new structure than the
+conservative default warrants. Plain `resources:` YAML (option c) is strictly
+lowest-blast-radius: it reuses the exact composition shape
+`platform/overlays/dev/forgejo/` already uses for its non-Helm resources
+(`namespace.yaml`, `forgejo-database.yaml`, `httproute.yaml` in a bare
+`resources:` list), leaves `apps/workloads.yaml` untouched, and needs zero
+ArgoCD/kustomize config change. On the convention question the task raises:
+`DEVELOPMENT.md`'s `charts/<chart>/` + `charts/<chart>/tests/` describes
+*where a Helm chart lives if one exists*; it does not mandate that every
+workload *be* a chart, and two thin static sites (four objects, no runtime
+config surface beyond an image tag) do not earn Helm's templating machinery
+for the local path. Keeping the charts as real repo-root artifacts still
+satisfies the parent design's "minimal Helm chart in `charts/`" commitment
+(`design.md` § Workloads item 2) and `test:chart`. To avoid the "two
+representations kept in sync by discipline" drift, the design phase may either
+hand-author the live plain YAML with the chart as a parallel
+`helm-unittest`-only artifact (this research's stated option c, accepting
+minor duplication) or render the live YAML from the chart via `helm template`
+in the `workloads:build` task (single-source-of-truth, at the cost of a
+render/commit step) — a smaller sub-decision that does not gate design. The
+decision is reversible, stays within the scope this research explicitly
+re-opened (§ Falsification item 4 named plain-YAML `resources:` as a
+candidate), and deliberately avoids the one out-of-scope, higher-blast-radius
+path (a1's cluster-wide load-restrictor relaxation); no escalation fires.
+
+**(i) nginx vs `@davidsouther/jiffies`' own Node static server for serving
+stage 2. Decided: keep nginx.** Parent design resolved decision 4 committed to
+nginx specifically for its one-line `location = /healthz { return 200; }`
+liveness mechanism (Closing Bell task 6; the gestalt probes
+`davidsouther.com/healthz`), and this research found no confirmed jiffies
+equivalent. Switching would reopen a settled decision for a larger runtime
+image and an unconfirmed healthz path with no offsetting upside — the
+conservative default is the already-settled choice.
+
+**(j) Serving-container `resources` requests/limits. Decided: set explicit,
+modest values proactively; do not ship request-less containers.** The cluster
+has evidenced scheduling pressure (`db93c91`, the Flagsmith OOMKill), and the
+forgejo chart's own comments flag request-less containers as a noisy-neighbor
+risk even with node headroom. A static server is cheap, so values well below
+forgejo's (`requests: cpu 100m/memory 256Mi`) suffice — e.g. `requests: cpu
+25m/memory 32Mi`, `limits: memory 64-128Mi`. The exact numbers are a
+design-phase artifact detail, but the direction (explicit + modest) is
+decided.
+
+**(k) Naming (test file, build task/script, submodule paths). Decided: follow
+the established sibling conventions.** `tests/workloads.bats` (matching
+`networking.bats` / `git-hosting.bats`); `[tasks."workloads:build"]` →
+`scripts/workloads-build.sh` (matching the `bootstrap` task shape
+`research/codebase.md` cites); submodule checkouts at `workloads/resume/` and
+`workloads/trips/`. Low-risk, convention-matching defaults; with (h) settled
+on plain `resources:` these are unconstrained by any chartHome-relative build
+context, so design may adjust freely but has a working starting point.
 
 ## Sources
 
