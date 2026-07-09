@@ -27,8 +27,8 @@ authenticate-and-render with real signal sources behind it, the exact bar of
 Closing Bell critical task 4.
 
 **Steps:**
-- [ ] Step 0: API surface area
-- [ ] Step 1: Wave `-10`/`0` (part) — namespace, Loki, Tempo
+- [x] Step 0: API surface area
+- [x] Step 1: Wave `-10`/`0` (part) — namespace, Loki, Tempo
 - [ ] Step 2: Wave `0` (part) — Mimir
 - [ ] Step 3: Wave `5` (part) — Grafana
 - [ ] Step 4: Wave `5` (rest) — Alloy, the Grafana `HTTPRoute`, the gateway-cert SAN

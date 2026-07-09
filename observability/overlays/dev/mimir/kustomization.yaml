@@ -1,6 +1,113 @@
-# Wave 0: mimir-distributed at one replica per component. Chart lands Step 2.
+# Wave 0: mimir-distributed at one replica per component. Chart NOT moved off
+# grafana.github.io/helm-charts (research:public, re-verified live at build)
+# -- version 6.1.0, the newest non-weekly-channel release as of this build
+# (the repo's newest entries are a "weekly" prerelease channel; 6.1.0 is the
+# newest stable tag).
+#
+# Chart 6.x defaults to the newer Kafka-backed "ingest storage" architecture
+# (kafka.enabled: true), adding a whole extra Kafka broker + ingester
+# zone-awareness requirement neither this feature-step's design nor its own
+# ~10-pod estimate accounted for (confirmed live at build). The chart ships
+# an official classic-architecture.yaml escape hatch back to the pre-6.x
+# direct distributor->ingester path with no Kafka; inlined below rather than
+# referenced, since helmCharts: valuesInline can't layer an extra values
+# file. This keeps the deployment to the single-node, minimal-footprint shape
+# this feature-step's design intends.
+#
+# ingester and store_gateway both default zoneAwareReplication.enabled: true
+# (3 logical zones, sharding a component's total replicas across all three --
+# confirmed live: with the chart's own default replicas, this renders THREE
+# ingester StatefulSets, not one). Disabled here for both, so their
+# top-level `replicas: 1` is the single StatefulSet's actual pod count, per
+# this feature-step's own one-replica-per-component intent.
+#
+# alertmanager, distributor, overrides_exporter, ruler, query_frontend,
+# compactor, and the gateway already default to 1 replica; only ingester,
+# querier, and query_scheduler default above 1 (3, 2, 2 respectively) and are
+# overridden below. The chunks/index/metadata/results memcached-based caches
+# all default disabled (enabled: false) and are left untouched. The bundled
+# minio (chart default, kept per this feature-step's operator-over-hand-rolled
+# convention) needs its own persistence.storageClass set explicitly, same as
+# every other stateful component's PVC.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
   argocd.argoproj.io/sync-wave: "0"
-helmCharts: []
+helmCharts:
+  - name: mimir-distributed
+    repo: https://grafana.github.io/helm-charts
+    version: 6.1.0
+    releaseName: mimir
+    namespace: observability
+    # helm template semantics (confirmed live at build, same caveat Storage
+    # hit for Valkey): kustomize's helmCharts: inflation renders every
+    # helm.sh/hook-annotated resource as a literal, permanent object --
+    # ArgoCD doesn't run `helm test`/`helm install` hook lifecycles.
+    # skipTests excludes the chart's own helm.sh/hook: test Job
+    # (mimir-smoke-test). The bundled minio subchart's own post-install/
+    # post-upgrade bucket-creation Job (mimir-minio-post-job) isn't a `test`
+    # hook, so skipTests doesn't touch it; deleted explicitly below via the
+    # patches: $patch delete idiom, scoped to this sub-kustomization only.
+    skipTests: true
+    valuesInline:
+      # classic-architecture.yaml, inlined (see comment above)
+      kafka:
+        enabled: false
+      mimir:
+        structuredConfig:
+          ingest_storage:
+            enabled: false
+            kafka:
+              address: null
+              topic: null
+              auto_create_topic_default_partitions: null
+          distributor:
+            remote_timeout: null
+          ingester:
+            push_grpc_method_enabled: null
+      ingester:
+        replicas: 1
+        zoneAwareReplication:
+          enabled: false
+        persistentVolume:
+          storageClass: local-path
+      querier:
+        replicas: 1
+      query_scheduler:
+        replicas: 1
+      store_gateway:
+        zoneAwareReplication:
+          enabled: false
+        persistentVolume:
+          storageClass: local-path
+      alertmanager:
+        persistentVolume:
+          storageClass: local-path
+      compactor:
+        persistentVolume:
+          storageClass: local-path
+      minio:
+        persistence:
+          storageClass: local-path
+# The bundled minio subchart's own generic post-install/post-upgrade Job
+# (buckets/users/policies/customCommands/svcaccts) -- not a `helm.sh/hook:
+# test` hook, so skipTests above doesn't remove it. helm template semantics
+# render it as a literal, permanent Job (same caveat as the smoke-test hook
+# above). Confirmed live: it runs the identical /config/initialize script
+# against the identical mimir-minio ConfigMap/Secret as the separate,
+# non-hook "mimir-make-minio-buckets-5.4.0" Job the mimir-distributed chart
+# itself already authors (driven by the same minio.buckets values) -- the two
+# Jobs create the same two buckets redundantly. Deleted here, scoped to this
+# sub-kustomization only; the non-hook Job (which ArgoCD's plain-apply
+# lifecycle handles correctly, unlike a helm-hook-flavored one with a
+# hook-succeeded delete policy) is left to do the actual bucket creation.
+patches:
+  - target:
+      kind: Job
+      name: mimir-minio-post-job
+    patch: |-
+      $patch: delete
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: mimir-minio-post-job
