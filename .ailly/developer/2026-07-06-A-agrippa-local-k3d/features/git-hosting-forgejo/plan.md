@@ -37,7 +37,7 @@ runner/Actions/CI assertion** (deferred).
 - [x] Step 1: Wave `-10` — the `forgejo` Namespace, wired into the shared `platform` overlay
 - [x] Step 2: Wave `-5` — sealing the admin + DB credentials, the storage `managed.roles[]` append, and the `forgejo` `Database` CR
 - [x] Step 3: Wave `0` — the Forgejo chart, its `HTTPRoute`, and the Gateway-cert SAN append
-- [ ] Step 4: Full GREEN — the authenticated admin + push proof, and the regression sweep
+- [x] Step 4: Full GREEN — the authenticated admin + push proof, and the regression sweep
 
 **Libraries & Skills (carried forward from `design.md`/`research.md`; load before each build step):**
 
