@@ -7,7 +7,7 @@
 
 **Steps:**
 - [x] Step 0: API surface area (file layout, `apps/platform.yaml` sync seam, `.sops.yaml` recipient check)
-- [ ] Step 1: Wave `-10` — the Keycloak Operator + CRDs + namespace
+- [x] Step 1: Wave `-10` — the Keycloak Operator + CRDs + namespace
 - [ ] Step 2: Wave `-5` — the two-namespace `keycloak-db` credential, `keycloak-admin`, the `managed.roles[]` append, and the `keycloak` `Database` CR
 - [ ] Step 3: Wave `0` — the `Keycloak` CR
 - [ ] Step 4: Wave `5` — the `KeycloakRealmImport`, the HTTPRoute, and the Gateway cert's `dnsNames` append
@@ -234,6 +234,8 @@ test "the Keycloak Operator's CRDs land, platform stays Synced/Healthy":
 - Edge case: the Operator's RBAC binding may hardcode a default namespace in its upstream `kubernetes.yml`; if that default is not `keycloak`, the `ClusterRoleBinding` subject needs a build-time patch (`research/public.md` [1] flags this) — verify the Operator pod actually starts and its ServiceAccount can watch/list `Keycloak`/`KeycloakRealmImport` CRs in the `keycloak` namespace, not just that the Deployment is `Running`.
 - Edge case: the Operator's admission webhook (both CRDs are webhook-validated) must be genuinely Ready — not just the Deployment `Running` — before wave `0`'s `Keycloak` CR is admitted in Step 3; the wave gate should sequence this, but verify live rather than trust the annotation alone.
 - Edge case: the new `keycloak` namespace must not collide with any namespace `core`/`storage` already created (`istio-system`, `istio-ingress`, `cert-manager`, `metallb-system`, `cnpg-system`, `storage`) — confirm no name clash.
+
+**Build-time finding (live-verified, corrected in `operator/kustomization.yaml`):** the pinned tag advanced past the design's 26.6.x research baseline to **26.7.0** (current stable at build time), which ships **four** CRDs, not two (`keycloakoidcclients.k8s.keycloak.org-v1.yml` and `keycloaksamlclients.k8s.keycloak.org-v1.yml` were added upstream between the two lines). 26.7.0's operator Deployment unconditionally starts a JOSDK informer for all four kinds regardless of which CRs this feature-step authors (`QUARKUS_OPERATOR_SDK_CONTROLLERS_*_NAMESPACES=JOSDK_WATCH_CURRENT` for all four in `kubernetes.yml`'s Deployment env) — installing only two left the operator pod CrashLoopBackOff (`Couldn't start informer for keycloaksamlclients.k8s.keycloak.org/v2alpha1 resources ... Not Found`). Fixed by adding both extra CRDs to `operator/kustomization.yaml`'s `resources:` (commit `3a6c52b`). Also live-confirmed: the `ClusterRoleBinding` subject in `kubernetes.yml` already hardcodes `namespace: keycloak` (matching this feature's namespace choice), so no RBAC patch was needed; the Operator ships no admission webhook in this raw-manifest install (no `ValidatingWebhookConfiguration`/`MutatingWebhookConfiguration` in `kubernetes.yml`), so the "webhook must be Ready" edge case above is moot for this Operator version -- the `ServerSideDiff` seam still guards against controller-set status/defaulted-field drift, just not webhook-defaulting specifically.
 
 **Implementation Outline**
 
