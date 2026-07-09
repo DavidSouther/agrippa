@@ -1,4 +1,7 @@
-# Step 0 skeleton (name-only stub, no spec); real content lands Step 3.
+# Wave 0: routes the trips dev host through the shared Gateway to the trips
+# Service. `matches` authored explicitly -- Networking's own live-hit trap
+# (an omitted `matches:` left `core` permanently OutOfSync); avoided here by
+# design fiat, same as every other HTTPRoute in this repo.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -6,3 +9,18 @@ metadata:
   namespace: trips
   annotations:
     argocd.argoproj.io/sync-wave: "0"
+spec:
+  parentRefs:
+    - name: agrippa-gateway
+      namespace: istio-ingress
+      sectionName: https
+  hostnames:
+    - trips.davidsouther.com.127.0.0.1.nip.io
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: trips
+          port: 80
