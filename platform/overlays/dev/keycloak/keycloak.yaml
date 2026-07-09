@@ -1,5 +1,7 @@
 # Wave 0: the Keycloak CR, wired to the shared postgres Cluster over its
-# plain-HTTP listener (spec lands Step 3).
+# plain-HTTP listener. The keycloak database (wave -5, Step 2) already
+# exists by the time this CR reconciles -- see design.md's "Correction by
+# the long-loop reviewer (2026-07-09)".
 apiVersion: k8s.keycloak.org/v2beta1
 kind: Keycloak
 metadata:
@@ -7,3 +9,27 @@ metadata:
   namespace: keycloak
   annotations:
     argocd.argoproj.io/sync-wave: "0"
+spec:
+  instances: 1
+  db:
+    vendor: postgres
+    host: postgres-rw.storage.svc
+    port: 5432
+    database: keycloak
+    usernameSecret:
+      name: keycloak-db
+      key: username
+    passwordSecret:
+      name: keycloak-db
+      key: password
+  ingress:
+    enabled: false
+  http:
+    httpEnabled: true
+  hostname:
+    hostname: https://auth.127.0.0.1.nip.io
+  proxy:
+    headers: xforwarded
+  bootstrapAdmin:
+    user:
+      secret: keycloak-admin
