@@ -1,0 +1,25 @@
+# matches: authored explicitly -- Networking's own live-hit trap (an omitted
+# matches: left `core` permanently OutOfSync); avoided here by design fiat,
+# matching every hand-authored HTTPRoute in this repo. Deliberately no
+# Certificate template -- the shared Gateway's single https listener
+# references only agrippa-gateway-tls, so a per-workload cert would be
+# unreferenced and inert (design's ratified decision 1).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .Chart.Name }}
+spec:
+  parentRefs:
+    - name: {{ .Values.gateway.name }}
+      namespace: {{ .Values.gateway.namespace }}
+      sectionName: {{ .Values.gateway.sectionName }}
+  hostnames:
+    - {{ .Values.hostname }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ .Chart.Name }}
+          port: {{ .Values.service.port }}

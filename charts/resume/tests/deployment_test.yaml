@@ -1,0 +1,41 @@
+suite: resume deployment
+templates:
+  - deployment.yaml
+tests:
+  - it: "pins the values-driven image and imagePullPolicy: Never"
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: resume:dev
+      - equal:
+          path: spec.template.spec.containers[0].imagePullPolicy
+          value: Never
+
+  - it: probes /healthz when healthz is enabled (the default)
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
+          value: /healthz
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.path
+          value: /healthz
+
+  - it: probes / when healthz is disabled
+    set:
+      healthz: false
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
+          value: /
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.path
+          value: /
+
+  - it: renders the values-driven image repository and tag
+    set:
+      image.repository: resume
+      image.tag: v1.2.3
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: resume:v1.2.3

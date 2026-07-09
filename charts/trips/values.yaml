@@ -1,0 +1,27 @@
+# Packaging chart for the trips workload -- kept aligned with
+# workloads/overlays/dev/trips/*.yaml (the live GitOps render path) by
+# discipline, not generated from it. Defaults here mirror that live overlay's
+# hand-authored values exactly.
+image:
+  repository: trips
+  tag: dev
+  pullPolicy: Never
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 32Mi
+  limits:
+    memory: 128Mi
+
+hostname: trips.davidsouther.com.127.0.0.1.nip.io
+
+service:
+  port: 80
+
+gateway:
+  name: agrippa-gateway
+  namespace: istio-ingress
+  sectionName: https

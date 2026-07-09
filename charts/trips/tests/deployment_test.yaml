@@ -1,0 +1,30 @@
+suite: trips deployment
+templates:
+  - deployment.yaml
+tests:
+  - it: "pins the values-driven image and imagePullPolicy: Never"
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: trips:dev
+      - equal:
+          path: spec.template.spec.containers[0].imagePullPolicy
+          value: Never
+
+  - it: probes plain / (no /healthz for trips)
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
+          value: /
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.path
+          value: /
+
+  - it: renders the values-driven image repository and tag
+    set:
+      image.repository: trips
+      image.tag: v1.2.3
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: trips:v1.2.3
