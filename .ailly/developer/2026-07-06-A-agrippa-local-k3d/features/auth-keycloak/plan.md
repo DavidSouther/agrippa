@@ -6,7 +6,7 @@
 **User story:** Given the bootstrapped `agrippa-dev` cluster with this Auth content committed and reconciled by ArgoCD into the `platform` layer — the Keycloak Operator in the `keycloak` namespace, the `Keycloak` CR wired to the shared `postgres` Cluster over its plain-HTTP listener, the `keycloak` `Database` CR in `storage`, and the declaratively-imported `agrippa` realm — when an operator requests the `agrippa` realm's OIDC discovery document at `https://auth.127.0.0.1.nip.io/realms/agrippa/.well-known/openid-configuration` through the k3d `:443` host port-map, then the `platform` Application is Synced/Healthy, the `Keycloak` CR is Ready, the `KeycloakRealmImport` is done, the `keycloak` `Database` CR is applied, the discovery endpoint returns 200 with the correct `issuer`, and the served TLS certificate is issued by the local CA — proving the Operator + external-Postgres + declarative-realm-import + shared-Gateway/HTTPRoute/local-CA-TLS path end-to-end, the substrate a later OIDC integration binds to.
 
 **Steps:**
-- [ ] Step 0: API surface area (file layout, `apps/platform.yaml` sync seam, `.sops.yaml` recipient check)
+- [x] Step 0: API surface area (file layout, `apps/platform.yaml` sync seam, `.sops.yaml` recipient check)
 - [ ] Step 1: Wave `-10` — the Keycloak Operator + CRDs + namespace
 - [ ] Step 2: Wave `-5` — the two-namespace `keycloak-db` credential, `keycloak-admin`, the `managed.roles[]` append, and the `keycloak` `Database` CR
 - [ ] Step 3: Wave `0` — the `Keycloak` CR

@@ -9,4 +9,9 @@ commonAnnotations:
   argocd.argoproj.io/sync-wave: "-10"
 resources:
   - namespace.yaml
-  # the 3 pinned raw-manifest URLs (2 CRDs + kubernetes.yml) land Step 1
+  # Keycloak Operator 26.7.0 (research:public, keycloak/keycloak-k8s-resources
+  # tag list -- current stable at build time; the design's 26.6.x line has
+  # since advanced). Pinned explicitly; do not float the tag.
+  - https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.7.0/kubernetes/keycloaks.k8s.keycloak.org-v1.yml
+  - https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.7.0/kubernetes/keycloakrealmimports.k8s.keycloak.org-v1.yml
+  - https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.7.0/kubernetes/kubernetes.yml
