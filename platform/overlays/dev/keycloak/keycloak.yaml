@@ -11,6 +11,19 @@ metadata:
     argocd.argoproj.io/sync-wave: "0"
 spec:
   instances: 1
+  # BUILD-TIME FINDING (live-verified): the Operator's own default request
+  # (1700Mi memory) could not schedule on the single-node k3d-agrippa-dev
+  # cluster -- its 16Gi allocatable is ~99% requested by everything else
+  # already live (istiod alone requests 2Gi; the concurrently-building
+  # Observability layer's Loki chunks-cache alone requests ~9.8Gi). Scoped
+  # down to a dev-appropriate footprint, matching this CR's other dev
+  # sizing (spec.instances: 1, a single minimal proof realm).
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 250m
+    limits:
+      memory: 1Gi
   db:
     vendor: postgres
     host: postgres-rw.storage.svc
