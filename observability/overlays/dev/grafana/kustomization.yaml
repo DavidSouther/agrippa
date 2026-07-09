@@ -1,7 +1,72 @@
 # Wave 5: Grafana (SQLite + local-path PVC, explicit admin/admin dev
-# credential, datasources). Chart lands Step 3.
+# credential, three provisioned datasources). Chart moved to
+# grafana-community.github.io/helm-charts (research:public, re-verified live
+# at build) -- version 12.7.2, the newest release as of this build.
+#
+# adminUser/adminPassword are the flagged single most easily-missed value:
+# the chart's own unset default generates a random 40-char password via the
+# Secret it creates from these two values (admin.existingSecret is empty by
+# default, so the chart itself owns admin-credential generation) -- set
+# explicitly here, the deliberate exception to the sops-sealing discipline
+# for a local dev credential that must never be valid in production.
+#
+# persistence.enabled defaults to false (ephemeral SQLite); enabled here with
+# an explicit local-path storageClassName.
+#
+# The top-level `datasources:` key (a `datasources.yaml` sub-key) is the
+# chart's own primary, sidecar-free provisioning path: `_pod.tpl` mounts each
+# key under `datasources:` directly from the chart's own ConfigMap at
+# /etc/grafana/provisioning/datasources/ -- sidecar.datasources.enabled is
+# NOT required (confirmed live in the chart's own templates, resolving this
+# feature-step's own flagged edge case).
+#
+# Datasource URLs, confirmed live against the Steps 1-2 charts:
+#   - Loki: Service "loki" (gateway.enabled: false upstream, so this is the
+#     singleBinary Service directly), port 3100 (loki.server.http_listen_port).
+#   - Mimir: Service "mimir-gateway" (mimir.gateway.service.name helper), the
+#     chart's own nginx gateway, which also ensures X-Scope-OrgID defaults to
+#     the no-auth tenant for every request -- required since going straight to
+#     a backend component would skip that. Port 80 (gateway.service.port
+#     default), path prefix /prometheus (mimir.prometheusHttpPrefix default).
+#   - Tempo: Service "tempo", port 3200 (tempo.tcp port from _ports.tpl) -- the
+#     plan's own values sketch had this at :3100, transcribed from the Loki
+#     line; corrected here against the chart's own service template.
+#
+# Grafana's own Service defaults to port 80 with targetPort 3000 (confirmed
+# live) -- service.port is set to 3000 explicitly so it matches Step 4's
+# HTTPRoute backendRefs port assumption instead of diverging from it.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
   argocd.argoproj.io/sync-wave: "5"
-helmCharts: []
+helmCharts:
+  - name: grafana
+    repo: https://grafana-community.github.io/helm-charts
+    version: 12.7.2
+    releaseName: grafana
+    namespace: observability
+    valuesInline:
+      adminUser: admin
+      adminPassword: admin
+      service:
+        port: 3000
+      persistence:
+        enabled: true
+        type: pvc
+        storageClassName: local-path
+      datasources:
+        datasources.yaml:
+          apiVersion: 1
+          datasources:
+            - name: Loki
+              type: loki
+              access: proxy
+              url: http://loki.observability.svc:3100
+            - name: Mimir
+              type: prometheus
+              access: proxy
+              url: http://mimir-gateway.observability.svc/prometheus
+            - name: Tempo
+              type: tempo
+              access: proxy
+              url: http://tempo.observability.svc:3200
