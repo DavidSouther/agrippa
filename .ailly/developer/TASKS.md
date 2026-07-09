@@ -372,3 +372,19 @@ From the feature-step `2026-07-06-A-agrippa-local-k3d/features/observability-lgt
 + **Exact chart `repoURL`/`version` pins.** Deferred to build-time live verification due to Grafana Helm chart ecosystem mid-migration (research finding 5): `grafana`/`loki` moved to `grafana-community.github.io/helm-charts`, `alloy` confirmed still at `grafana.github.io/helm-charts`, `tempo`/`mimir` to be re-verified live. Re-verify each chart's current repository and version at build before committing.
 
 + **Exact in-cluster Service names/ports.** Deferred to build-time verification: Loki/Mimir/Tempo Service names and ports (for datasource URLs and Alloy forward targets) and Grafana's Service name/port (for HTTPRoute `backendRefs`) are `releaseName`-derived; confirm each against the pinned chart at build, as the Storage step confirmed CNPG and Valkey Service spellings.
+
+## Feature-step deferred decisions: Workloads (resume + trips)
+
+From the feature-step `2026-07-06-A-agrippa-local-k3d/features/workloads-resume-trips/design.md` and `plan.md`:
+
++ **`agathon` and `ailly.dev` (parent design decision 1).** Neither repo is inspected or built in this feature-step; both are named as future workloads in the platform roadmap (item 9) with roadmap seams only. This feature-step focuses on resume and trips.
+
++ **Trips' Cloudflare Access → Terraform port, and CI → Forgejo Actions port.** Prod/post-git-hosting concerns; forgejo-runner does not exist yet. Trips already has working Cloudflare Access and CI policies documented in the "Trips workload design" section above; these port-to-IaC tasks are deferred to the cloud cycle and the Git hosting / CI runner completion.
+
++ **Publishing the built images to a real registry (Forgejo's own or GHCR).** The local build stays registry-less by design; `imagePullPolicy: Never` pins locally-imported images. Publishing the charts and images to a real registry is a deferred cloud-cycle parity seam. The `charts/resume/` and `charts/trips/` Helm charts are kept as the packaging artifact for this future prod/registry-push path and for `mise run test:chart` helm-unittest verification.
+
++ **Chart-vs-live-YAML drift checking.** The design accepted "aligned by discipline, not by a generator" (decision h): both the live plain-`resources:` YAML overlays (`workloads/overlays/dev/<name>/`) and the Helm charts (`charts/<name>/`) are hand-authored and kept in sync by discipline. A build-phase or plan-phase drift-check that renders `helm template` and diffs it against the live overlay would catch any future skew; this is a named, reversible seam if the risk grows to warrant the extra step.
+
++ **Correcting the parent `plan.md`'s Feature 9 item 5 framing.** The parent project's `plan.md` still describes the already-committed `tests/agrippa.bats` fix (Feature 0, commit `a9cdfbc`) as pending; this is a documentation-accuracy fix for the next opportunity that touches it, not a blocker.
+
++ **Relaxing kustomize's `LoadRestrictionsRootOnly` to enable local `helmCharts:` inflation.** Rejected in favor of plain-`resources:` YAML composition (decision h), proven by a live `kustomize build --enable-helm` smoke test that confirmed the repo-root `charts/<chart>/` violates the default load restrictor. Relaxing it cluster-wide is out of this step's scope and deferred to a future cloud-cycle decision if the single-source-of-truth seam ever becomes critical.
