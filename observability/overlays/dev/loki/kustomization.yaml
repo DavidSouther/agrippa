@@ -1,6 +1,61 @@
-# Wave 0: Loki (Monolithic mode). Chart lands Step 1.
+# Wave 0: Loki (Monolithic mode). Chart moved to
+# grafana-community.github.io/helm-charts (research:public, re-verified live
+# at build) -- version 18.4.2, the newest release as of this build.
+#
+# deploymentMode: Monolithic is already the chart's own default; kept explicit
+# per this feature-step's own convention. loki.storage.type defaults to "s3";
+# overridden to "filesystem" for a fully local dev deployment with no object
+# storage. loki.useTestSchema: true is the chart's own documented "for testing
+# or playing around" escape hatch (values.yaml's own comment) -- with
+# minio.enabled left at its chart default (false), the
+# loki.testSchemaObjectStore helper resolves to "filesystem", giving a
+# schemaConfig that matches the filesystem backend above without hand-authoring
+# one. loki.auth_enabled defaults to true (requiring an X-Scope-OrgID header on
+# every request); disabled for this single-tenant local dev deployment so
+# Grafana's and Alloy's writes need no tenant header.
+#
+# templates/validate.yaml (confirmed live at build, two round trips): with
+# filesystem storage, it requires singleBinary.replicas > 0 explicitly (the
+# chart's own loki.monolithicReplicas helper that would otherwise force 1 is
+# not consulted by this guard, which reads .Values.singleBinary.replicas
+# directly) -- AND it requires the SimpleScalable write/read/backend replica
+# counts (each defaulting to 3 regardless of deploymentMode) to be zeroed,
+# since Monolithic and SimpleScalable can't both show nonzero replicas at
+# once. Both are set below; omitting either reproduces a `helm template`
+# validate.yaml failure.
+#
+# gateway.enabled defaults to true (an nginx reverse proxy in front of Loki).
+# Disabled here: Loki is consumed only by Grafana and Alloy inside the
+# cluster, so the extra Deployment/Service is unneeded footprint -- Grafana's
+# and Alloy's targets go straight to the singleBinary Service ("loki":3100).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
   argocd.argoproj.io/sync-wave: "0"
-helmCharts: []
+helmCharts:
+  - name: loki
+    repo: https://grafana-community.github.io/helm-charts
+    version: 18.4.2
+    releaseName: loki
+    namespace: observability
+    valuesInline:
+      deploymentMode: Monolithic
+      singleBinary:
+        replicas: 1
+        persistence:
+          storageClass: local-path
+      write:
+        replicas: 0
+      read:
+        replicas: 0
+      backend:
+        replicas: 0
+      loki:
+        auth_enabled: false
+        commonConfig:
+          replication_factor: 1
+        storage:
+          type: filesystem
+        useTestSchema: true
+      gateway:
+        enabled: false
