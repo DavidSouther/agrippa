@@ -6,22 +6,12 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "0"
-    # `syncOptions: ServerSideApply=true` (below) silently auto-enables
-    # ArgoCD's deprecated "Structured Merge Diff" strategy (v3.4.4
-    # controller/state.go: `if ... HasOption("ServerSideApply=true") {
-    # diffConfigBuilder.WithStructuredMergeDiff(true) }`, application-wide,
-    # no per-resource override). SMD predicts the live state via a LOCAL
-    # simulation rather than a real API-server dry-run, and mispredicts
-    # CRD-defaulted/controller-owned fields -- exactly the Gateway/HTTPRoute
-    # symptom this feature-step hit live (permanently OutOfSync even though
-    # `spec` matched byte-for-byte; three different `ignoreDifferences` forms
-    # -- jsonPointers, jqPathExpressions, managedFieldsManagers -- all failed
-    # to clear it, because the real problem was the diff algorithm's
-    # prediction, not un-ignored content). This is a known, still-open
-    # upstream limitation (argoproj/argo-cd#22151, matching this exact
-    # Gateway API scenario). Fix: force the stable "Server-Side Diff"
-    # strategy instead, which performs a real dry-run apply against the API
-    # server so admission/defaulting participates correctly.
+    # `syncOptions: ServerSideApply=true` (below) auto-enables ArgoCD's
+    # deprecated "Structured Merge Diff", which mispredicts CRD-defaulted/
+    # controller-owned fields (argoproj/argo-cd#22151) and left Gateway/
+    # HTTPRoute permanently OutOfSync despite a byte-for-byte spec match.
+    # Force the stable "Server-Side Diff" strategy, which performs a real
+    # dry-run apply against the API avoiding CRD mispredictions.
     argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: default
@@ -46,16 +36,10 @@ spec:
     syncOptions:
       - ServerSideApply=true
       - SkipDryRunOnMissingResource=true
-  # istiod self-patches its own webhooks' caBundle (with its self-signed CA)
-  # AND failurePolicy (Ignore at chart-default -> Fail once istiod considers
-  # itself ready to serve validation) at startup and on every cert-rotation
-  # reconcile (both live-verified this session: istiod-default-validator and
-  # istio-validator-istio-system's live objects carry a non-empty caBundle
-  # and failurePolicy: Fail, neither of which the git-sourced manifest ever
-  # sets), which would otherwise leave `core` permanently OutOfSync fighting
-  # istiod's own controller. Scoped to exactly those two webhook configs and
-  # fields, not a blanket admissionregistration.k8s.io ignore -- cert-manager's
-  # and metallb's webhook configs stay diffed normally.
+  # istiod self-patches several fields on its own webhooks (caBundle,
+  # failurePolicy); ignore them here when reconciling app config, scoped to
+  # exactly those two webhook configs so cert-manager's and metallb's stay
+  # diffed normally.
   ignoreDifferences:
     - group: admissionregistration.k8s.io
       kind: ValidatingWebhookConfiguration
