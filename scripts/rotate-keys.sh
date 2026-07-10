@@ -45,7 +45,7 @@ fi
 existing_json="$(bw list items --search "$ITEM" 2>/dev/null | jq --arg name "$ITEM" '[.[] | select(.name == $name)]' 2>/dev/null || echo '[]')"
 existing="$(printf '%s' "$existing_json" | jq 'length' 2>/dev/null || echo 0)"
 if [ "${existing:-0}" -gt 0 ]; then
-  echo "rotate-keys: a Bitwarden item named '$ITEM' already exists -- about to rotate it. The old item will be archived and a fresh identity stored under the live name; .sops.yaml's recipient for secrets/${ENV_NAME}/.* is updated to match, and any already-committed secret under secrets/${ENV_NAME}/ is re-encrypted  using the archived key. Anything that can't be re-encrypted automatically is reported at the end for manual follow-up." >&2
+  echo "rotate-keys: a Bitwarden item named '$ITEM' already exists -- about to rotate it. The old item will be archived and a fresh identity stored under the live name; .sops.yaml's recipient for secrets/${ENV_NAME}/.* is updated to match, and any already-committed secret under secrets/${ENV_NAME}/ is re-encrypted using the archived key. Anything that can't be re-encrypted automatically is reported at the end for manual follow-up." >&2
   printf 'rotate-keys: type "rotate" to confirm: ' >&2
   confirmation=""
   read -r confirmation || true
@@ -81,7 +81,7 @@ if [ "${existing:-0}" -gt 0 ]; then
     [ -n "$old_id" ] || continue
     old_identity="$(bw get notes "$old_id" 2>/dev/null || true)"
     bw get item "$old_id" \
-      | jq --arg name "${ITEM}-${archived_at)" '.name = $name' \
+      | jq --arg name "${ITEM} (archived ${archived_at})" '.name = $name' \
       | bw encode \
       | bw edit item "$old_id" >/dev/null
   done < <(printf '%s' "$existing_json" | jq -r '.[].id')
