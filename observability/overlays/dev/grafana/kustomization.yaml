@@ -10,7 +10,12 @@
 # must never be valid in production.
 #
 # persistence.enabled defaults to false (ephemeral SQLite); enabled here with
-# an explicit local-path storageClassName.
+# an explicit local-path storageClassName. deploymentStrategy defaults to
+# RollingUpdate, which would surge a second pod before terminating the
+# first; on a single-node cluster that means two Grafana pods briefly
+# mounting the same ReadWriteOnce local-path PVC and racing for the sqlite
+# file. Forced to Recreate so the old pod (and its mount) is gone before the
+# new one starts.
 #
 # The top-level `datasources:` key (a `datasources.yaml` sub-key) is the
 # chart's own primary, sidecar-free provisioning path: `_pod.tpl` mounts each
@@ -50,6 +55,8 @@ helmCharts:
         enabled: true
         type: pvc
         storageClassName: local-path
+      deploymentStrategy:
+        type: Recreate
       datasources:
         datasources.yaml:
           apiVersion: 1
