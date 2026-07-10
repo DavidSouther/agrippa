@@ -97,14 +97,40 @@ unset identity item_json tmpl existing_json
 
 echo "rotate-keys: stored a new age identity in Bitwarden as '$ITEM'."
 
-# --- Stage 4: re-encrypt already-committed secrets under the new recipient -
+# --- Stage 4: reflect the new recipient in .sops.yaml ----------------------
+# .sops.yaml controls how NEW encryptions happen, and Stage 5 below depends on
+# it already naming the new recipient: `sops updatekeys` re-wraps a file's
+# data key for whatever recipients .sops.yaml's rule lists *at the time it
+# runs*. Doing this update first means Stage 5 actually adds the new key;
+# doing it after (the reverse order) makes updatekeys a silent no-op -- it
+# sees the still-old recipient, decides nothing changed, and the secret stays
+# readable only by the key being rotated away from.
+SOPS_YAML=".sops.yaml"
+if [ -f "$SOPS_YAML" ]; then
+  export SOPS_ENV_PATH_REGEX="^secrets/${ENV_NAME}/.*\$"
+  export SOPS_NEW_AGE="$recipient"
+  old_age="$(yq '.creation_rules[] | select(.path_regex == env(SOPS_ENV_PATH_REGEX)) | .age' "$SOPS_YAML" 2>/dev/null || true)"
+  if [ -n "$old_age" ] && [ "$old_age" != "null" ]; then
+    yq -i '(.creation_rules[] | select(.path_regex == env(SOPS_ENV_PATH_REGEX)) | .age) = env(SOPS_NEW_AGE)' "$SOPS_YAML"
+    echo "rotate-keys: updated $SOPS_YAML -- replaced the recipient for secrets/${ENV_NAME}/.* ."
+  else
+    yq -i '.creation_rules += [{"path_regex": env(SOPS_ENV_PATH_REGEX), "age": env(SOPS_NEW_AGE)}] | .creation_rules[].age style="double"' "$SOPS_YAML"
+    echo "rotate-keys: added a new secrets/${ENV_NAME}/.* rule to $SOPS_YAML ."
+  fi
+  unset SOPS_ENV_PATH_REGEX SOPS_NEW_AGE old_age
+else
+  echo "rotate-keys: $SOPS_YAML not found; add this recipient for env '$ENV_NAME' by hand:" >&2
+  echo "$recipient"
+fi
+
+# --- Stage 5: re-encrypt already-committed secrets under the new recipient -
 # rotate-keys owns the whole environment's rotation record: sops updatekeys
 # re-wraps a file's data key for whatever recipients
-# .sops.yaml's rule now lists (the new key, just written above), but to do
-# that it must first decrypt the file's current data key -- which needs the
-# OLD private key. That's supplied only as SOPS_AGE_KEY, an environment
-# variable sops itself reads, sourced from old_identity (never written to
-# disk) and unset immediately after this stage.
+# .sops.yaml's rule now lists (the new key, just written above in Stage 4),
+# but to do that it must first decrypt the file's current data key -- which
+# needs the OLD private key. That's supplied only as SOPS_AGE_KEY, an
+# environment variable sops itself reads, sourced from old_identity (never
+# written to disk) and unset immediately after this stage.
 secret_files=()
 if [ -d "secrets/${ENV_NAME}" ]; then
   while IFS= read -r -d '' f; do
@@ -133,23 +159,3 @@ else
   fi
 fi
 unset old_identity
-
-# --- Stage 5: reflect the new recipient in .sops.yaml ----------------------
-# .sops.yaml controls how NEW encryptions happen.
-SOPS_YAML=".sops.yaml"
-if [ -f "$SOPS_YAML" ]; then
-  export SOPS_ENV_PATH_REGEX="^secrets/${ENV_NAME}/.*\$"
-  export SOPS_NEW_AGE="$recipient"
-  old_age="$(yq '.creation_rules[] | select(.path_regex == env(SOPS_ENV_PATH_REGEX)) | .age' "$SOPS_YAML" 2>/dev/null || true)"
-  if [ -n "$old_age" ] && [ "$old_age" != "null" ]; then
-    yq -i '(.creation_rules[] | select(.path_regex == env(SOPS_ENV_PATH_REGEX)) | .age) = env(SOPS_NEW_AGE)' "$SOPS_YAML"
-    echo "rotate-keys: updated $SOPS_YAML -- replaced the recipient for secrets/${ENV_NAME}/.* ."
-  else
-    yq -i '.creation_rules += [{"path_regex": env(SOPS_ENV_PATH_REGEX), "age": env(SOPS_NEW_AGE)}] | .creation_rules[].age style="double"' "$SOPS_YAML"
-    echo "rotate-keys: added a new secrets/${ENV_NAME}/.* rule to $SOPS_YAML ."
-  fi
-  unset SOPS_ENV_PATH_REGEX SOPS_NEW_AGE old_age
-else
-  echo "rotate-keys: $SOPS_YAML not found; add this recipient for env '$ENV_NAME' by hand:" >&2
-  echo "$recipient"
-fi
