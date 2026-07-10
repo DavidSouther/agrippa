@@ -24,7 +24,8 @@ server {
     absolute_redirect off;
 
     location = /healthz {
-        return 200;
+        return 200 "OK";
+        add_header Content-Type text/plain;
     }
 
     location / {
