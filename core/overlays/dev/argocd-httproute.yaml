@@ -1,6 +1,4 @@
-# Wave 5: routes the ArgoCD UI host through the shared Gateway to
-# argocd-server. Backend-TLS route (port 443, argocd-server's HTTPS listener)
-# -- see argocd-destinationrule.yaml for the TLS re-origination this needs.
+# Route ArgoCD UI host through the shared Gateway to argocd-server.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -16,13 +14,6 @@ spec:
   hostnames:
     - argocd.127.0.0.1.nip.io
   rules:
-    # `matches` is authored explicitly, matching the Gateway API CRD's own
-    # schema default for an omitted rule (PathPrefix "/"): live-verified this
-    # session that ArgoCD's pre-sync diff does not replicate this particular
-    # nested-array structural default the way it replicates scalar defaults
-    # (e.g. backendRefs[].group/kind below), which otherwise left `core`
-    # permanently OutOfSync comparing an omitted `matches:` against the
-    # API-defaulted live value.
     - matches:
         - path:
             type: PathPrefix
