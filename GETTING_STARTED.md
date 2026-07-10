@@ -22,7 +22,14 @@ brew install docker mise
 
 k3s plus a handful of platform pods needs more than Docker Desktop's older defaults. In
 Docker Desktop, go to **Settings > Resources** and allocate at least **4 CPUs** and **8GB of
-memory**. If you've set these differently, override the preflight check's expectations with
+memory** to get the preflight check and an early, partial build running. If you're bringing up
+the **complete** platform (all ten feature-steps: Istio, cert-manager, metallb, Postgres, Valkey,
+Keycloak, Forgejo, Flagsmith, and the full Grafana LGTM observability stack, alongside the
+workloads), budget more: live steady-state memory usage on a fully-built `agrippa-dev` cluster
+measures around **9.5GB with zero burst headroom** (see
+`docs/runbooks/capacity-and-resource-pressure.md` for the live baseline and how to check your own
+node's numbers), so **6 CPUs and 12GB** is a safer floor and **8 CPUs and 16GB** is comfortable.
+If you've set these differently, override the preflight check's expectations with
 `MIN_DOCKER_CPU` and `MIN_DOCKER_MEM_GB` (see below).
 
 Apple Silicon and Intel Macs both work — k3d and the k3s node image are multi-arch, no extra
