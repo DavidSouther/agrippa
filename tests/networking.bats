@@ -17,9 +17,9 @@
 #        self-signed default -- proving the Gateway + HTTPRoute + local-hostname +
 #        local-CA-TLS shared contract end-to-end.
 #
-# This stands in for the
-# production Cloudflare edge (public DNS, public ACME TLS, cloudflared), since
-# both are cloud-only and out of scope for a local cluster, with a local CA
+# This stands in for the production Cloudflare edge (public DNS, public ACME
+# TLS, cloudflared), since those are cloud-only and out of scope for a local
+# cluster, with a local CA
 # (real certs, deliberately not host-trusted -- probed with `curl -k`) and
 # `*.nip.io` loopback hostnames reached through the k3d port-map. It also
 # DEFINES the shared Gateway/HTTPRoute/hostname/TLS contract every later
