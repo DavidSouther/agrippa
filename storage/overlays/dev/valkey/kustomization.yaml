@@ -52,9 +52,13 @@ helmCharts:
 # Scoped precisely to this sub-kustomization's own resources (the maintainer-
 # acknowledged workaround from the issue thread) -- no cross-contamination
 # risk, since cnpg-operator/'s resources are a wholly separate kustomization.
+# Matched by the chart's own common label rather than an enumerated kind list,
+# so a future chart bump adding a new kind (NetworkPolicy, PodDisruptionBudget,
+# etc. -- all already templated behind disabled-by-default values) still gets
+# namespaced without this patch needing to track the chart's template set.
 patches:
   - target:
-      kind: (ConfigMap|ServiceAccount|Service|PersistentVolumeClaim|Deployment)
+      labelSelector: "app.kubernetes.io/instance=valkey"
     patch: |-
       - op: add
         path: /metadata/namespace
