@@ -65,6 +65,17 @@ helmCharts:
             remote_timeout: null
           ingester:
             push_grpc_method_enabled: null
+            ring:
+              # BUILD-TIME BUG, found live post-deploy: the chart sets no
+              # explicit replication_factor, so Mimir's binary default (3)
+              # applies -- impossible to satisfy with this feature-step's own
+              # single ingester replica above. Every remote_write was
+              # therefore failing with "at least 2 live replicas required,
+              # could only find 1" (confirmed in the distributor's own logs),
+              # so no metric had ever actually been ingested. Matches this
+              # single-ingester, single-node dev deployment's real replication
+              # capacity.
+              replication_factor: 1
       ingester:
         replicas: 1
         zoneAwareReplication:
