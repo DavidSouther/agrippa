@@ -32,11 +32,548 @@ helmCharts:
               type: loki
               access: proxy
               url: http://loki.observability.svc:3100
+              # Explicit, stable uid (Grafana otherwise auto-derives one) so
+              # provisioned dashboard JSON can reference it directly.
+              uid: loki
             - name: Mimir
               type: prometheus
               access: proxy
               url: http://mimir-gateway.observability.svc/prometheus
+              uid: mimir
             - name: Tempo
               type: tempo
               access: proxy
               url: http://tempo.observability.svc:3200
+              uid: tempo
+      dashboardProviders:
+        dashboardproviders.yaml:
+          apiVersion: 1
+          providers:
+            - name: default
+              orgId: 1
+              folder: ""
+              type: file
+              disableDeletion: false
+              editable: true
+              options:
+                path: /var/lib/grafana/dashboards/default
+      # Provisioned via the chart's own sidecar-free `dashboards:` path (the
+      # same mechanism as `datasources:` above -- confirmed live in the
+      # chart's own templates, no `sidecar.dashboards.enabled` needed): one
+      # ConfigMap per provider, one key per dashboard, mounted at
+      # /var/lib/grafana/dashboards/<provider>/<key>.json to match
+      # dashboardProviders' `options.path` above. Inlined via `json:` rather
+      # than `file:`: kustomize's helmCharts: inflation runs `helm template`
+      # against a freshly re-fetched, gitignored copy of the chart under
+      # this directory's own charts/ cache, so a `file:` reference (Helm's
+      # `.Files.Get`, resolved relative to the chart root) can't reliably
+      # reach a file that lives outside that cache -- confirmed by reading
+      # the chart's own templates, not assumed. `json:` sidesteps this
+      # entirely (confirmed working via a live `kustomize build --enable-helm`
+      # render).
+      dashboards:
+        default:
+          web-analytics:
+            json: |
+              {
+                "uid": "web-analytics",
+                "title": "Web Analytics (Istio Gateway)",
+                "description": "Traffic through the shared agrippa-gateway: request volume, status codes, latency, and top destinations, sourced from Istio's istio_requests_total/istio_request_duration_milliseconds telemetry.",
+                "tags": [
+                  "web",
+                  "istio",
+                  "gateway"
+                ],
+                "timezone": "browser",
+                "schemaVersion": 39,
+                "version": 1,
+                "refresh": "30s",
+                "time": {
+                  "from": "now-6h",
+                  "to": "now"
+                },
+                "panels": [
+                  {
+                    "id": 1,
+                    "type": "stat",
+                    "title": "Total Requests",
+                    "gridPos": {
+                      "h": 4,
+                      "w": 6,
+                      "x": 0,
+                      "y": 0
+                    },
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "mimir"
+                    },
+                    "targets": [
+                      {
+                        "refId": "A",
+                        "expr": "sum(increase(istio_requests_total{reporter=\"source\"}[$__range]))"
+                      }
+                    ],
+                    "fieldConfig": {
+                      "defaults": {
+                        "unit": "short",
+                        "decimals": 0
+                      },
+                      "overrides": []
+                    },
+                    "options": {
+                      "reduceOptions": {
+                        "calcs": [
+                          "lastNotNull"
+                        ]
+                      },
+                      "colorMode": "value",
+                      "graphMode": "area"
+                    }
+                  },
+                  {
+                    "id": 2,
+                    "type": "stat",
+                    "title": "Requests / sec (current)",
+                    "gridPos": {
+                      "h": 4,
+                      "w": 6,
+                      "x": 6,
+                      "y": 0
+                    },
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "mimir"
+                    },
+                    "targets": [
+                      {
+                        "refId": "A",
+                        "expr": "sum(rate(istio_requests_total{reporter=\"source\"}[5m]))"
+                      }
+                    ],
+                    "fieldConfig": {
+                      "defaults": {
+                        "unit": "reqps",
+                        "decimals": 2
+                      },
+                      "overrides": []
+                    },
+                    "options": {
+                      "reduceOptions": {
+                        "calcs": [
+                          "lastNotNull"
+                        ]
+                      },
+                      "colorMode": "value",
+                      "graphMode": "area"
+                    }
+                  },
+                  {
+                    "id": 3,
+                    "type": "stat",
+                    "title": "Error Rate (5xx)",
+                    "gridPos": {
+                      "h": 4,
+                      "w": 6,
+                      "x": 12,
+                      "y": 0
+                    },
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "mimir"
+                    },
+                    "targets": [
+                      {
+                        "refId": "A",
+                        "expr": "100 * sum(rate(istio_requests_total{reporter=\"source\",response_code=~\"5..\"}[5m])) / sum(rate(istio_requests_total{reporter=\"source\"}[5m]))"
+                      }
+                    ],
+                    "fieldConfig": {
+                      "defaults": {
+                        "unit": "percent",
+                        "decimals": 2,
+                        "thresholds": {
+                          "mode": "absolute",
+                          "steps": [
+                            {
+                              "color": "green",
+                              "value": null
+                            },
+                            {
+                              "color": "orange",
+                              "value": 1
+                            },
+                            {
+                              "color": "red",
+                              "value": 5
+                            }
+                          ]
+                        }
+                      },
+                      "overrides": []
+                    },
+                    "options": {
+                      "reduceOptions": {
+                        "calcs": [
+                          "lastNotNull"
+                        ]
+                      },
+                      "colorMode": "value",
+                      "graphMode": "area"
+                    }
+                  },
+                  {
+                    "id": 4,
+                    "type": "stat",
+                    "title": "p95 Latency",
+                    "gridPos": {
+                      "h": 4,
+                      "w": 6,
+                      "x": 18,
+                      "y": 0
+                    },
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "mimir"
+                    },
+                    "targets": [
+                      {
+                        "refId": "A",
+                        "expr": "histogram_quantile(0.95, sum(rate(istio_request_duration_milliseconds_bucket{reporter=\"source\"}[5m])) by (le))"
+                      }
+                    ],
+                    "fieldConfig": {
+                      "defaults": {
+                        "unit": "ms",
+                        "decimals": 1
+                      },
+                      "overrides": []
+                    },
+                    "options": {
+                      "reduceOptions": {
+                        "calcs": [
+                          "lastNotNull"
+                        ]
+                      },
+                      "colorMode": "value",
+                      "graphMode": "area"
+                    }
+                  },
+                  {
+                    "id": 5,
+                    "type": "timeseries",
+                    "title": "Request Rate by Destination",
+                    "gridPos": {
+                      "h": 8,
+                      "w": 12,
+                      "x": 0,
+                      "y": 4
+                    },
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "mimir"
+                    },
+                    "targets": [
+                      {
+                        "refId": "A",
+                        "expr": "sum(rate(istio_requests_total{reporter=\"source\"}[5m])) by (destination_service_name)",
+                        "legendFormat": "{{destination_service_name}}"
+                      }
+                    ],
+                    "fieldConfig": {
+                      "defaults": {
+                        "unit": "reqps",
+                        "custom": {
+                          "fillOpacity": 20,
+                          "stacking": {
+                            "mode": "normal"
+                          }
+                        }
+                      },
+                      "overrides": []
+                    },
+                    "options": {
+                      "legend": {
+                        "displayMode": "table",
+                        "placement": "bottom",
+                        "calcs": [
+                          "mean",
+                          "max"
+                        ]
+                      },
+                      "tooltip": {
+                        "mode": "multi"
+                      }
+                    }
+                  },
+                  {
+                    "id": 6,
+                    "type": "timeseries",
+                    "title": "Requests by Status Code",
+                    "gridPos": {
+                      "h": 8,
+                      "w": 12,
+                      "x": 12,
+                      "y": 4
+                    },
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "mimir"
+                    },
+                    "targets": [
+                      {
+                        "refId": "A",
+                        "expr": "sum(rate(istio_requests_total{reporter=\"source\"}[5m])) by (response_code)",
+                        "legendFormat": "{{response_code}}"
+                      }
+                    ],
+                    "fieldConfig": {
+                      "defaults": {
+                        "unit": "reqps",
+                        "custom": {
+                          "fillOpacity": 20,
+                          "stacking": {
+                            "mode": "normal"
+                          }
+                        }
+                      },
+                      "overrides": []
+                    },
+                    "options": {
+                      "legend": {
+                        "displayMode": "table",
+                        "placement": "bottom",
+                        "calcs": [
+                          "mean",
+                          "max"
+                        ]
+                      },
+                      "tooltip": {
+                        "mode": "multi"
+                      }
+                    }
+                  },
+                  {
+                    "id": 7,
+                    "type": "bargauge",
+                    "title": "Top Destinations (by request count)",
+                    "gridPos": {
+                      "h": 8,
+                      "w": 12,
+                      "x": 0,
+                      "y": 12
+                    },
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "mimir"
+                    },
+                    "targets": [
+                      {
+                        "refId": "A",
+                        "expr": "topk(10, sum(increase(istio_requests_total{reporter=\"source\"}[$__range])) by (destination_service_name))",
+                        "legendFormat": "{{destination_service_name}}",
+                        "instant": true
+                      }
+                    ],
+                    "fieldConfig": {
+                      "defaults": {
+                        "unit": "short",
+                        "decimals": 0
+                      },
+                      "overrides": []
+                    },
+                    "options": {
+                      "displayMode": "gradient",
+                      "orientation": "horizontal",
+                      "reduceOptions": {
+                        "calcs": [
+                          "lastNotNull"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "id": 8,
+                    "type": "timeseries",
+                    "title": "Latency Percentiles (all destinations)",
+                    "gridPos": {
+                      "h": 8,
+                      "w": 12,
+                      "x": 12,
+                      "y": 12
+                    },
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "mimir"
+                    },
+                    "targets": [
+                      {
+                        "refId": "A",
+                        "expr": "histogram_quantile(0.50, sum(rate(istio_request_duration_milliseconds_bucket{reporter=\"source\"}[5m])) by (le))",
+                        "legendFormat": "p50"
+                      },
+                      {
+                        "refId": "B",
+                        "expr": "histogram_quantile(0.95, sum(rate(istio_request_duration_milliseconds_bucket{reporter=\"source\"}[5m])) by (le))",
+                        "legendFormat": "p95"
+                      },
+                      {
+                        "refId": "C",
+                        "expr": "histogram_quantile(0.99, sum(rate(istio_request_duration_milliseconds_bucket{reporter=\"source\"}[5m])) by (le))",
+                        "legendFormat": "p99"
+                      }
+                    ],
+                    "fieldConfig": {
+                      "defaults": {
+                        "unit": "ms"
+                      },
+                      "overrides": []
+                    },
+                    "options": {
+                      "legend": {
+                        "displayMode": "list",
+                        "placement": "bottom"
+                      },
+                      "tooltip": {
+                        "mode": "multi"
+                      }
+                    }
+                  },
+                  {
+                    "id": 9,
+                    "type": "timeseries",
+                    "title": "Error Rate by Destination (5xx)",
+                    "gridPos": {
+                      "h": 8,
+                      "w": 12,
+                      "x": 0,
+                      "y": 20
+                    },
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "mimir"
+                    },
+                    "targets": [
+                      {
+                        "refId": "A",
+                        "expr": "sum(rate(istio_requests_total{reporter=\"source\",response_code=~\"5..\"}[5m])) by (destination_service_name)",
+                        "legendFormat": "{{destination_service_name}}"
+                      }
+                    ],
+                    "fieldConfig": {
+                      "defaults": {
+                        "unit": "reqps"
+                      },
+                      "overrides": []
+                    },
+                    "options": {
+                      "legend": {
+                        "displayMode": "table",
+                        "placement": "bottom",
+                        "calcs": [
+                          "max"
+                        ]
+                      },
+                      "tooltip": {
+                        "mode": "multi"
+                      }
+                    }
+                  },
+                  {
+                    "id": 10,
+                    "type": "timeseries",
+                    "title": "Bytes Transferred",
+                    "gridPos": {
+                      "h": 8,
+                      "w": 12,
+                      "x": 12,
+                      "y": 20
+                    },
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "mimir"
+                    },
+                    "targets": [
+                      {
+                        "refId": "A",
+                        "expr": "sum(rate(istio_request_bytes_sum{reporter=\"source\"}[5m]))",
+                        "legendFormat": "request bytes/s"
+                      },
+                      {
+                        "refId": "B",
+                        "expr": "sum(rate(istio_response_bytes_sum{reporter=\"source\"}[5m]))",
+                        "legendFormat": "response bytes/s"
+                      }
+                    ],
+                    "fieldConfig": {
+                      "defaults": {
+                        "unit": "Bps"
+                      },
+                      "overrides": []
+                    },
+                    "options": {
+                      "legend": {
+                        "displayMode": "list",
+                        "placement": "bottom"
+                      },
+                      "tooltip": {
+                        "mode": "multi"
+                      }
+                    }
+                  },
+                  {
+                    "id": 11,
+                    "type": "table",
+                    "title": "Traffic Detail (source -> destination -> status)",
+                    "gridPos": {
+                      "h": 8,
+                      "w": 24,
+                      "x": 0,
+                      "y": 28
+                    },
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "mimir"
+                    },
+                    "targets": [
+                      {
+                        "refId": "A",
+                        "expr": "sum by (source_workload, destination_service_name, response_code) (increase(istio_requests_total{reporter=\"source\"}[$__range]))",
+                        "instant": true,
+                        "format": "table"
+                      }
+                    ],
+                    "fieldConfig": {
+                      "defaults": {
+                        "unit": "short",
+                        "decimals": 0
+                      },
+                      "overrides": []
+                    },
+                    "options": {
+                      "showHeader": true,
+                      "sortBy": [
+                        {
+                          "displayName": "Value",
+                          "desc": true
+                        }
+                      ]
+                    },
+                    "transformations": [
+                      {
+                        "id": "organize",
+                        "options": {
+                          "excludeByName": {
+                            "Time": true
+                          },
+                          "renameByName": {
+                            "Value": "Requests",
+                            "source_workload": "Source",
+                            "destination_service_name": "Destination",
+                            "response_code": "Status"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
