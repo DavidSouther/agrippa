@@ -147,7 +147,9 @@ Log in at `https://dashboard.davidsouther.com.127.0.0.1.nip.io/` with
 valid anywhere else). Three datasources are pre-provisioned:
 
 - **Loki** (logs), uid `P8E80F9AEF21F6940`. Explore → Loki, a LogQL query like
-  `{namespace="forgejo"}`.
+  `{instance=~"forgejo/.*"}` (this deployment's logs carry no `namespace`/`pod`
+  labels, only `instance` in the form `<namespace>/<pod>:<container>` -- see
+  `docs/runbooks/interpreting-dashboards.md` for real example log lines).
 - **Mimir** (metrics, Prometheus-compatible), uid `PAE45454D0EDB9216`. Explore
   → Mimir, a PromQL query like
   `sum(rate(istio_requests_total{reporter="source"}[5m])) by (destination_service_name)`.
