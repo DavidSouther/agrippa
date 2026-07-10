@@ -22,6 +22,17 @@ helmCharts:
         enabled: false
       mimir:
         structuredConfig:
+          limits:
+            # BUILD-TIME BUG, found live post-deploy alongside the
+            # replication_factor fix above: the chart's per-tenant default
+            # (10000 items/s, 200000 burst) throttled Alloy's own retry queue
+            # once writes started succeeding, because roughly 13h of backlog
+            # had piled up in Alloy's WAL while every write was failing on
+            # the replication-factor bug. Raised generously for this
+            # single-tenant ("anonymous") dev cluster, where the real cost of
+            # a higher static ceiling is zero.
+            ingestion_rate: 100000
+            ingestion_burst_size: 2000000
           ingest_storage:
             enabled: false
           ingester:
