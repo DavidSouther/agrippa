@@ -23,16 +23,6 @@
 #        denied outside it (proving the recommended per-app ACL isolation) -- the
 #        storage-class + per-app DB/role naming shared contract, proven end-to-end.
 #
-# EXPECTED TO FAIL until Storage lands the `storage/overlays/dev` composition (the
-# CNPG operator, the shared `postgres` Cluster, the shared Valkey instance, the
-# permanent `smoke` fixture, and its sops-encrypted credentials) and ArgoCD
-# reconciles it. Before that, `storage/overlays/dev` is the empty `resources: []`
-# placeholder: the `storage` Application is already trivially Synced/Healthy (so
-# THEN 0 passes even now, exactly as networking.bats' THEN 0 passed on empty
-# `core`), but no CNPG CRDs, no `storage` namespace, and no `postgres` Cluster
-# exist -- so the suite fails at THEN 1. That red state defines "done" for this
-# feature-step.
-#
 # NOTE: this suite deliberately does NOT tear the cluster, the datastores, or the
 # `smoke` fixture down. All are long-lived and GitOps-managed: ArgoCD's
 # prune/selfHeal would re-create anything torn down, so the `smoke` fixture is a
