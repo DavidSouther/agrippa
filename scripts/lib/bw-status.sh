@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Sourced by scripts/bootstrap.sh and scripts/rotate-keys.sh. Caller must set
-# PREFIX before sourcing (used in every message below); exits non-zero on any
-# Bitwarden CLI absence/lock/auth failure.
+# Check bitwarden status before running any commands that need its out-of-cluster secrets.
+#
+# Caller should set PREFIX to the current sceop type for good error messages.
+# Exits non-zero on any Bitwarden CLI absence/lock/auth failure.
 : "${PREFIX:?scripts/lib/bw-status.sh requires PREFIX to be set}"
 
 if ! command -v bw >/dev/null 2>&1; then
