@@ -1,4 +1,4 @@
-# Wave 5: the shared Gateway's TLS certificate, issued by the local CA.
+# Shared Gateway's TLS certificate, issued by the local CA.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
