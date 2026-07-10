@@ -1,6 +1,9 @@
-# Istio ambient's control plane and data plane -- istiod, theistio-cni node agent, and ztunnel.
+# Istio ambient's control plane and data plane -- istiod, the istio-cni node agent, and ztunnel.
 #
-# The `cni` chart deliberately OMITS `global.platform: k3d` to avoid clobbering overrides; see istio/istio#57110
+# Setting `global.platform: k3d` on the `cni` chart (unlike istiod/ztunnel
+# above) would apply its bundled k3d platform preset, which clobbers the
+# cniConfDir/cniBinDir overrides below with its own defaults -- known
+# upstream gap, istio/istio#57110. Deliberately left unset here.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
