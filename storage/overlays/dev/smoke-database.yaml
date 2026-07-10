@@ -1,5 +1,3 @@
-# Wave 5: the permanent `smoke` fixture's Database CR -- a declarative
-# per-app-database proof standing in for future Feature 5-8 consumers.
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
 metadata:
