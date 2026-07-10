@@ -1,10 +1,4 @@
-# Wave -5: Istio ambient's control plane and data plane -- istiod, the
-# istio-cni node agent, and ztunnel. Pinned 1.30.2 (lockstep with base,
-# Step 1). The cni chart's CNI path overrides are TOP-LEVEL values (not
-# nested under a `cni:` key) and live-verified this session against the
-# pinned rancher/k3s:v1.35.5-k3s1 node
-# (docker exec k3d-agrippa-dev-server-0 ls /var/lib/rancher/k3s/agent/etc/cni/net.d
-# and /var/lib/rancher/k3s/data/cni); re-verify if that image pin ever moves.
+# Istio ambient's control plane and data plane -- istiod, theistio-cni node agent, and ztunnel.
 #
 # The `cni` chart deliberately OMITS `global.platform: k3d` (unlike istiod/
 # ztunnel below): live-verified this session (`helm template` isolation) that
