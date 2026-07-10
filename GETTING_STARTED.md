@@ -60,8 +60,8 @@ MIN_DOCKER_CPU=6 MIN_DOCKER_MEM_GB=12 bats tests/preflight.bats
 
 ## Next steps
 
-Once the preflight check is green, see `.ailly/developer/TASKS.md` for the platform build roadmap
-and `DEVELOPMENT.md` for the full testing conventions (`kubeconform`, `helm-unittest`, `SLOs`,
-`probers`) this repo uses once there's an actual platform component to build against.
+Once the preflight check is green, see `DEVELOPMENT.md` for the full testing conventions
+(`kubeconform`, `helm-unittest`, `SLOs`, `probers`) this repo uses once there's an actual
+platform component to build against.
 
 [K3d]: https://k3d.io/

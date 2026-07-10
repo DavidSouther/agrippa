@@ -3,8 +3,7 @@
 # Gestalt feature test for the Agrippa platform.
 #
 # One black-box, end-to-end smoke test of the whole deployed platform, probed
-# from outside the cluster. It encodes the platform's user-visible contract from
-# ailly/developer/2026-06-10-A-agrippa/design.md:
+# from outside the cluster. It encodes the platform's user-visible contract:
 #
 #   1. Public site is alive      -> davidsouther.com/healthz returns 2xx within 1s
 #   2. Authenticated route gated  -> trips.davidsouther.com is challenged by
@@ -41,7 +40,7 @@ setup() {
 
 @test "public site is alive: davidsouther.com/healthz returns 2xx within 1s" {
   # DEV presents a real cert from the local CA, deliberately not in the host
-  # trust store (research decision 3); tolerate it with -k. PROD is unchanged.
+  # trust store; tolerate it with -k. PROD is unchanged.
   local k_flag=()
   [ "${ENV}" = "dev" ] && k_flag=(-k)
   run curl -sS "${k_flag[@]}" -o /dev/null -w '%{http_code}' --max-time 1 \
@@ -55,7 +54,7 @@ setup() {
   if [ "${ENV}" = "dev" ]; then
     # DEV: authenticate with local-only hardcoded test credentials and confirm a
     # Grafana dashboard actually renders for the operator. -k tolerates the
-    # local, untrusted-by-design CA (research decision 3).
+    # local, untrusted-by-design CA.
     run curl -sS -k -o /dev/null -w '%{http_code}' --max-time 5 \
       -u "${GRAFANA_USER}:${GRAFANA_PASSWORD}" \
       "https://${DASHBOARD_HOST}/api/dashboards/home"
@@ -73,9 +72,9 @@ setup() {
 
 @test "authenticated route is gated: trips.davidsouther.com challenges anonymous users via Cloudflare Access (prod) or is plainly reachable (dev)" {
   if [ "${ENV}" = "dev" ]; then
-    # DEV: local trips is served publicly with no Keycloak/Access gating
-    # (design long-loop decision 3) -- assert plain reachability (2xx or
-    # redirect) from the local ingress. -k tolerates the local CA.
+    # DEV: local trips is served publicly with no Keycloak/Access gating --
+    # assert plain reachability (2xx or redirect) from the local ingress.
+    # -k tolerates the local CA.
     run curl -sS -k -o /dev/null -w '%{http_code}' --max-time 5 "https://${TRIPS_HOST}/"
     [ "$status" -eq 0 ]
     [[ "$output" =~ ^(2[0-9][0-9]|3[0-9][0-9])$ ]]

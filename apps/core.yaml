@@ -19,14 +19,13 @@ spec:
     automated:
       prune: true
       selfHeal: true
-    # Forward seam: core will carry cert-manager/Gateway API/Istio CRDs in a
-    # later feature-step, which need server-side apply the same way ArgoCD's
-    # own install does (Step 2) to avoid the client-side annotation-size
-    # limit, and SkipDryRunOnMissingResource for CRD/CR ordering across syncs.
-    # (syncOptions nests under syncPolicy per the Application CRD schema --
-    # plan.md's Implementation Outline had this as a spec-level sibling of
-    # syncPolicy, which `kubectl apply` rejects as an unknown field under
-    # strict decoding; corrected here against the live v3.4.4 CRD schema.)
+    # core will carry cert-manager/Gateway API/Istio CRDs in a later
+    # feature-step, which need server-side apply (client-side apply's
+    # last-applied-configuration annotation overflows on large CRDs) and
+    # SkipDryRunOnMissingResource for CRD/CR ordering across syncs. Note that
+    # syncOptions nests under syncPolicy, not as a sibling of it -- the
+    # Application CRD's strict decoding rejects a spec-level sibling as an
+    # unknown field.
     syncOptions:
       - ServerSideApply=true
       - SkipDryRunOnMissingResource=true
