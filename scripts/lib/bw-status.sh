@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Check bitwarden status before running any commands that need its out-of-cluster secrets.
 #
+# Fails loudly, names the missing prerequisite, and ensures no plaintext fallback.
+# This is a human-resolved blocker (`bw login` / `bw unlock`), not something this task works around.
 # Caller should set PREFIX to the current sceop type for good error messages.
 # Exits non-zero on any Bitwarden CLI absence/lock/auth failure.
 : "${PREFIX:?scripts/lib/bw-status.sh requires PREFIX to be set}"
