@@ -40,7 +40,7 @@
 #
 # Run:  bats tests/storage.bats
 #
-# Requires: bats-core, kubectl, and (for green) the running bootstrapped
+# Requires: bats-core, mise, kubectl, and (for green) the running bootstrapped
 # `agrippa-dev` cluster with the Storage `storage` content reconciled by ArgoCD.
 # `psql`/`valkey-cli` run INSIDE the cluster (kubectl exec into the datastore
 # pods) -- no host database tooling is needed. The build phase re-verifies the
@@ -56,11 +56,14 @@ setup() {
   # Run from the repo root (standard bats hygiene); the assertions themselves
   # drive kubectl against the long-lived cluster and read no committed files.
   cd "$(dirname "$BATS_TEST_FILENAME")/.." || return 1
+  # Trust the repo mise.toml so `mise run` is non-interactive (parity with the
+  # sibling suites; this suite itself only needs kubectl).
+  mise trust >/dev/null 2>&1 || true
 }
 
 # Echoes "<sync> <health>" for the `storage` ArgoCD Application, e.g. "Synced Healthy".
 storage_app_status() {
-  kubectl --context "$CTX" -n argocd get application storage \
+  mise x kubectl -- kubectl --context "$CTX" -n argocd get application storage \
     -o jsonpath='{.status.sync.status} {.status.health.status}' 2>/dev/null
 }
 
@@ -80,7 +83,7 @@ wait_for_storage_synced_healthy() {
 # The CNPG primary pod for the shared `postgres` Cluster (label spelling
 # re-verified at build against the pinned CNPG version).
 pg_primary_pod() {
-  kubectl --context "$CTX" -n "$NS" get pods \
+  mise x kubectl -- kubectl --context "$CTX" -n "$NS" get pods \
     -l "cnpg.io/cluster=${PG_CLUSTER},cnpg.io/instanceRole=primary" \
     -o jsonpath='{.items[0].metadata.name}' 2>/dev/null
 }
@@ -88,7 +91,7 @@ pg_primary_pod() {
 # The shared Valkey pod (label spelling re-verified at build against the pinned
 # chart).
 valkey_pod() {
-  kubectl --context "$CTX" -n "$NS" get pods \
+  mise x kubectl -- kubectl --context "$CTX" -n "$NS" get pods \
     -l "app.kubernetes.io/name=valkey" \
     -o jsonpath='{.items[0].metadata.name}' 2>/dev/null
 }
@@ -105,11 +108,11 @@ valkey_pod() {
   # THEN 1: the single shared Postgres Cluster `postgres` is Healthy, on a
   # local-path-backed PVC -- the storage-class half of the shared contract. CNPG's
   # healthy phase string contains "healthy" (exact phrasing re-verified at build).
-  run kubectl --context "$CTX" -n "$NS" get cluster.postgresql.cnpg.io "$PG_CLUSTER" \
+  run mise x kubectl -- kubectl --context "$CTX" -n "$NS" get cluster.postgresql.cnpg.io "$PG_CLUSTER" \
     -o jsonpath='{.status.phase}'
   [ "$status" -eq 0 ]
   [[ "$output" == *healthy* ]]
-  run kubectl --context "$CTX" -n "$NS" get pvc \
+  run mise x kubectl -- kubectl --context "$CTX" -n "$NS" get pvc \
     -l "cnpg.io/cluster=${PG_CLUSTER}" \
     -o jsonpath='{.items[0].spec.storageClassName}'
   [ "$status" -eq 0 ]
@@ -118,7 +121,7 @@ valkey_pod() {
   # THEN 2: the `smoke` Database CR has been reconciled by the operator -- its
   # database exists in the shared instance. This is the declarative per-app
   # provisioning mechanism the contract is built on (a Database CR per consumer).
-  run kubectl --context "$CTX" -n "$NS" get database.postgresql.cnpg.io "$SLUG" \
+  run mise x kubectl -- kubectl --context "$CTX" -n "$NS" get database.postgresql.cnpg.io "$SLUG" \
     -o jsonpath='{.status.applied}'
   [ "$status" -eq 0 ]
   [ "$output" = "true" ]
@@ -134,10 +137,10 @@ valkey_pod() {
   # `local ... peer`/`trust` rule and prove nothing about the credential.
   pod="$(pg_primary_pod)"
   [ -n "$pod" ]
-  pgpw="$(kubectl --context "$CTX" -n "$NS" get secret "${SLUG}-db" \
+  pgpw="$(mise x kubectl -- kubectl --context "$CTX" -n "$NS" get secret "${SLUG}-db" \
     -o go-template='{{ index .data "password" | base64decode }}')"
   [ -n "$pgpw" ]
-  run kubectl --context "$CTX" -n "$NS" exec "$pod" -c postgres -- \
+  run mise x kubectl -- kubectl --context "$CTX" -n "$NS" exec "$pod" -c postgres -- \
     env PGPASSWORD="$pgpw" psql -h 127.0.0.1 -U "$SLUG" -d "$SLUG" -tAc 'select current_database()'
   [ "$status" -eq 0 ]
   [[ "$output" == *"$SLUG"* ]]
@@ -149,14 +152,14 @@ valkey_pod() {
   # mere existence check.
   vpod="$(valkey_pod)"
   [ -n "$vpod" ]
-  vkpw="$(kubectl --context "$CTX" -n "$NS" get secret "${SLUG}-valkey" \
+  vkpw="$(mise x kubectl -- kubectl --context "$CTX" -n "$NS" get secret "${SLUG}-valkey" \
     -o go-template="{{ index .data \"${SLUG}\" | base64decode }}")"
   [ -n "$vkpw" ]
-  run kubectl --context "$CTX" -n "$NS" exec "$vpod" -- \
+  run mise x kubectl -- kubectl --context "$CTX" -n "$NS" exec "$vpod" -- \
     valkey-cli --no-auth-warning --user "$SLUG" -a "$vkpw" set "${SLUG}:probe" ok
   [ "$status" -eq 0 ]
   [[ "$output" == *OK* ]]
-  run kubectl --context "$CTX" -n "$NS" exec "$vpod" -- \
+  run mise x kubectl -- kubectl --context "$CTX" -n "$NS" exec "$vpod" -- \
     valkey-cli --no-auth-warning --user "$SLUG" -a "$vkpw" set "other:probe" nope
   [[ "$output" == *NOPERM* ]]
 }
