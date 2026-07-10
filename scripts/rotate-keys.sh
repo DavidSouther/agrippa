@@ -6,7 +6,7 @@ positional_count=0
 for a in "$@"; do
   case "$a" in
     --*)
-      echo "rotate-keys: unknown flag '$a' (this task takes only an environment name; replacing an existing key is confirmed interactively, not by a flag)" >&2
+      echo "rotate-keys: unknown flag '$a'" >&2
       exit 1
       ;;
     *)
@@ -32,7 +32,7 @@ esac
 ITEM="agrippa-age-${ENV_NAME}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# --- Stage 1: require bw present and unlocked, and yq available for Stage 4
+## Require bw present and unlocked, and yq available
 PREFIX="rotate-keys"
 # shellcheck source=lib/bw-status.sh
 source "$SCRIPT_DIR/lib/bw-status.sh"
@@ -41,11 +41,11 @@ if ! command -v yq >/dev/null 2>&1; then
   exit 1
 fi
 
-# Receive confirmation for rotating keys before performing key rotation.
+# --- Receive confirmation for rotating keys before performing key rotation.
 existing_json="$(bw list items --search "$ITEM" 2>/dev/null | jq --arg name "$ITEM" '[.[] | select(.name == $name)]' 2>/dev/null || echo '[]')"
 existing="$(printf '%s' "$existing_json" | jq 'length' 2>/dev/null || echo 0)"
 if [ "${existing:-0}" -gt 0 ]; then
-  echo "rotate-keys: a Bitwarden item named '$ITEM' already exists -- about to rotate it. The old item is archived (renamed, not deleted) and a fresh identity is stored under the live name; .sops.yaml's recipient for secrets/${ENV_NAME}/.* is updated to match, and any already-committed secret under secrets/${ENV_NAME}/ is re-encrypted (sops updatekeys) using the archived key. Anything that can't be re-encrypted automatically is reported at the end for manual follow-up." >&2
+  echo "rotate-keys: a Bitwarden item named '$ITEM' already exists -- about to rotate it. The old item will be archived and a fresh identity stored under the live name; .sops.yaml's recipient for secrets/${ENV_NAME}/.* is updated to match, and any already-committed secret under secrets/${ENV_NAME}/ is re-encrypted  using the archived key. Anything that can't be re-encrypted automatically is reported at the end for manual follow-up." >&2
   printf 'rotate-keys: type "rotate" to confirm: ' >&2
   confirmation=""
   read -r confirmation || true
@@ -55,7 +55,7 @@ if [ "${existing:-0}" -gt 0 ]; then
   fi
 fi
 
-# --- Stage 3: generate the keypair and store the private half in Bitwarden -
+## Generate the keypair and store the private half in Bitwarden
 identity="$(age-keygen 2>/dev/null)"
 if [ -z "$identity" ]; then
   echo "rotate-keys: age-keygen produced no output; aborting without contacting Bitwarden." >&2
@@ -71,15 +71,9 @@ fi
 tmpl="$(bw get template item | jq --arg name "$ITEM" '.type = 2 | .name = $name | .secureNote = {"type": 0} | .notes = null')"
 item_json="$(printf '%s' "$identity" | jq -R -s --argjson item "$tmpl" '. as $n | $item + {notes: $n}')"
 
-# Archives the old item under a distinct name instead of deleting it, so the
-# prior identity stays recoverable in Bitwarden -- Stage 5 below uses it to
-# re-encrypt already-committed secrets, and it remains available afterward for
-# anything Stage 5 couldn't reach. old_identity is captured here (in memory
-# only, never written to disk) before the item's name changes. Renaming
-# happens before the new item is created so two items are never live under
-# the same name at once. Reaching this point at all with existing>0 already
-# means the "rotate" confirmation above was given -- there is no separate
-# flag path that skips it.
+# Archives the old item so the prior identity stays recoverable in Bitwarden.
+# Used below to re-encrypt already-committed secrets, and it remains available afterward for
+# anything rotate-keys couldn't reach.
 old_identity=""
 if [ "${existing:-0}" -gt 0 ]; then
   archived_at="$(date +%Y-%m-%d)"
@@ -87,7 +81,7 @@ if [ "${existing:-0}" -gt 0 ]; then
     [ -n "$old_id" ] || continue
     old_identity="$(bw get notes "$old_id" 2>/dev/null || true)"
     bw get item "$old_id" \
-      | jq --arg name "${ITEM} (archived ${archived_at})" '.name = $name' \
+      | jq --arg name "${ITEM}-${archived_at)" '.name = $name' \
       | bw encode \
       | bw edit item "$old_id" >/dev/null
   done < <(printf '%s' "$existing_json" | jq -r '.[].id')
@@ -97,14 +91,8 @@ unset identity item_json tmpl existing_json
 
 echo "rotate-keys: stored a new age identity in Bitwarden as '$ITEM'."
 
-# --- Stage 4: reflect the new recipient in .sops.yaml ----------------------
-# .sops.yaml controls how NEW encryptions happen, and Stage 5 below depends on
-# it already naming the new recipient: `sops updatekeys` re-wraps a file's
-# data key for whatever recipients .sops.yaml's rule lists *at the time it
-# runs*. Doing this update first means Stage 5 actually adds the new key;
-# doing it after (the reverse order) makes updatekeys a silent no-op -- it
-# sees the still-old recipient, decides nothing changed, and the secret stays
-# readable only by the key being rotated away from.
+
+## Reflect the new recipient in .sops.yaml
 SOPS_YAML=".sops.yaml"
 if [ -f "$SOPS_YAML" ]; then
   export SOPS_ENV_PATH_REGEX="^secrets/${ENV_NAME}/.*\$"
@@ -123,14 +111,7 @@ else
   echo "$recipient"
 fi
 
-# --- Stage 5: re-encrypt already-committed secrets under the new recipient -
-# rotate-keys owns the whole environment's rotation record: sops updatekeys
-# re-wraps a file's data key for whatever recipients
-# .sops.yaml's rule now lists (the new key, just written above in Stage 4),
-# but to do that it must first decrypt the file's current data key -- which
-# needs the OLD private key. That's supplied only as SOPS_AGE_KEY, an
-# environment variable sops itself reads, sourced from old_identity (never
-# written to disk) and unset immediately after this stage.
+## Re-encrypt already-committed secrets under the new recipient
 secret_files=()
 if [ -d "secrets/${ENV_NAME}" ]; then
   while IFS= read -r -d '' f; do
