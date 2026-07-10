@@ -2,9 +2,12 @@
 # Selects by the documented Istio Gateway-injection label
 # (gateway.networking.k8s.io/gateway-name: <gateway name>)
 #
-# 172.18.0.3 is the k3d server node's container IP; it drives on cluster:down, so so rederive with
+# 172.18.0.3 is the k3d server node's container IP; it drifts on cluster:down/up,
+# so rederive with:
 #
-# docker inspect k3d-agrippa-dev-server-0 --format  '{{ (index .NetworkSettings.Networks "k3d-agrippa-dev").IPAddress }}'
+# docker inspect k3d-agrippa-dev-server-0 --format '{{ (index .NetworkSettings.Networks "k3d-agrippa-dev").IPAddress }}'
+#
+# `mise run cluster:up` checks this automatically and warns on drift.
 apiVersion: v1
 kind: Service
 metadata:
