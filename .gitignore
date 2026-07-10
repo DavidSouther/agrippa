@@ -1,2 +1,8 @@
 .superpowers/
 .env
+
+# Local `kustomize build --enable-helm` chart-pull cache (Networking
+# feature-step's istio-base/istio-control helmCharts: inflation) -- ArgoCD's
+# repo-server pulls charts server-side into its own cache; this is purely a
+# side effect of local verification runs, never git-tracked content.
+core/overlays/dev/*/charts/

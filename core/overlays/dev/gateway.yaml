@@ -1,0 +1,29 @@
+# The shared Gateway API Gateway.
+# This object causes istiod's Gateway API controller to auto-provision a Deployment + Service
+# for the gateway data plane in this same namespace (istio-ingress).
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: agrippa-gateway
+  namespace: istio-ingress
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  gatewayClassName: istio
+  listeners:
+    - name: https
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: agrippa-gateway-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All

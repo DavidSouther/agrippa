@@ -1,0 +1,14 @@
+# Istio-native TLS re-origination to the HTTPS argocd-server:443 backend.
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: argocd-server-tls
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  host: argocd-server.argocd.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: SIMPLE
+      insecureSkipVerify: true

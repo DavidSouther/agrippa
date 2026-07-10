@@ -1,0 +1,29 @@
+# DNAT the k3d node IP's :80/:443 to the auto-provisioned gateway pods.
+# Selects by the documented Istio Gateway-injection label
+# (gateway.networking.k8s.io/gateway-name: <gateway name>)
+#
+# 172.18.0.3 is the k3d server node's container IP; it drifts on cluster:down/up,
+# so rederive with:
+#
+# docker inspect k3d-agrippa-dev-server-0 --format '{{ (index .NetworkSettings.Networks "k3d-agrippa-dev").IPAddress }}'
+#
+# `mise run cluster:up` checks this automatically and warns on drift.
+apiVersion: v1
+kind: Service
+metadata:
+  name: agrippa-gateway-external
+  namespace: istio-ingress
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  externalIPs:
+    - 172.18.0.3
+  selector:
+    gateway.networking.k8s.io/gateway-name: agrippa-gateway
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+    - name: https
+      port: 443
+      targetPort: 443

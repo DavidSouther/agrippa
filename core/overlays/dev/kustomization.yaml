@@ -1,3 +1,16 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-resources: []
+resources:
+  - gateway-api/
+  - istio-base/
+  - metallb/
+  - cert-manager/
+  - istio-control/
+  - metallb-config.yaml
+  - cert-issuers.yaml
+  - istio-ingress-namespace.yaml
+  - gateway.yaml
+  - gateway-cert.yaml
+  - gateway-external-svc.yaml
+  - argocd-httproute.yaml
+  - argocd-destinationrule.yaml

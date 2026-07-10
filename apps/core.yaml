@@ -6,6 +6,13 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "0"
+    # `syncOptions: ServerSideApply=true` (below) auto-enables ArgoCD's
+    # deprecated "Structured Merge Diff", which mispredicts CRD-defaulted/
+    # controller-owned fields (argoproj/argo-cd#22151) and left Gateway/
+    # HTTPRoute permanently OutOfSync despite a byte-for-byte spec match.
+    # Force the stable "Server-Side Diff" strategy, which performs a real
+    # dry-run apply against the API avoiding CRD mispredictions.
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: default
   source:
@@ -29,3 +36,20 @@ spec:
     syncOptions:
       - ServerSideApply=true
       - SkipDryRunOnMissingResource=true
+  # istiod self-patches several fields on its own webhooks (caBundle,
+  # failurePolicy); ignore them here when reconciling app config, scoped to
+  # exactly those two webhook configs so cert-manager's and metallb's stay
+  # diffed normally.
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: istiod-default-validator
+      jqPathExpressions:
+        - .webhooks[].clientConfig.caBundle
+        - .webhooks[].failurePolicy
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: istio-validator-istio-system
+      jqPathExpressions:
+        - .webhooks[].clientConfig.caBundle
+        - .webhooks[].failurePolicy
