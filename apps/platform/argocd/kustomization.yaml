@@ -1,0 +1,74 @@
+# ArgoCD's install kustomization. Includes KSOPS repo-server patch so
+# `kustomize build` can decrypt sops-encrypted manifests.
+#
+# Applied once by `mise run bootstrap`; reconciled thereafter by the `argocd`
+# Application inside platform/overlays/dev so ArgoCD manages its own
+# install from the same source the manual bootstrap used.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: argocd
+
+resources:
+  # Pinned to v3.4.4 (current stable 2026-07-10). Non-HA, single-manifest
+  # install: CRDs, RBAC, and ArgoCD components.
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.4/manifests/install.yaml
+
+patches:
+  # KSOPS (viaduct-ai/kustomize-sops) integration: an init
+  # container installs the ksops+kustomize binaries into a shared emptyDir,
+  # the main container mounts them over its own /usr/local/bin copies, and a
+  # second volume mounts the sops-age Secret so SOPS_AGE_KEY_FILE resolves to
+  # the age private key at decrypt time.
+  - target:
+      kind: Deployment
+      name: argocd-repo-server
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: argocd-repo-server
+      spec:
+        template:
+          spec:
+            volumes:
+              - name: custom-tools
+                emptyDir: {}
+              - name: sops-age
+                secret:
+                  secretName: sops-age
+            initContainers:
+              - name: install-ksops
+                image: viaductoss/ksops:v4.5.1
+                command: ["/usr/local/bin/ksops", "install", "--with-kustomize", "/custom-tools"]
+                volumeMounts:
+                  - name: custom-tools
+                    mountPath: /custom-tools
+            containers:
+              - name: argocd-repo-server
+                volumeMounts:
+                  - name: custom-tools
+                    mountPath: /usr/local/bin/kustomize
+                    subPath: kustomize
+                  - name: custom-tools
+                    mountPath: /usr/local/bin/ksops
+                    subPath: ksops
+                  - name: sops-age
+                    mountPath: /.config/sops/age
+                env:
+                  - name: XDG_CONFIG_HOME
+                    value: /.config
+                  - name: SOPS_AGE_KEY_FILE
+                    # matches the key.txt data key in bootstrap.sh
+                    value: /.config/sops/age/key.txt
+  # kustomize.buildOptions must allow the ksops exec plugin to run
+  - target:
+      kind: ConfigMap
+      name: argocd-cm
+    patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-cm
+      data:
+        kustomize.buildOptions: "--enable-alpha-plugins --enable-exec"

@@ -1,0 +1,31 @@
+# Core owns metallb, Gateway API CRDs, cert-manager & istio
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: core
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DavidSouther/agrippa.git
+    targetRevision: main
+    path: core/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    # core will carry cert-manager/Gateway API/Istio CRDs in a later
+    # feature-step, which need server-side apply (client-side apply's
+    # last-applied-configuration annotation overflows on large CRDs) and
+    # SkipDryRunOnMissingResource for CRD/CR ordering across syncs. Note that
+    # syncOptions nests under syncPolicy, not as a sibling of it -- the
+    # Application CRD's strict decoding rejects a spec-level sibling as an
+    # unknown field.
+    syncOptions:
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true

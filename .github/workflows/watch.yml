@@ -2,10 +2,9 @@ name: watch
 
 # Continuous synthetic-monitoring placeholder for the probers testing style.
 # Runs independent of any deploy so it can catch drift between deploys, not just
-# at merge/sync time. See docs/developer/TASKS.md and
-# ailly/developer/research/prober-synthetic-monitoring.md for why this runs here
-# (GitHub-hosted, outside the cluster it will eventually probe) instead of in
-# k3s or on a future in-cluster forgejo-runner.
+# at merge/sync time. Runs GitHub-hosted, outside the cluster it will eventually
+# probe, instead of in k3s or on a future in-cluster forgejo-runner, so
+# monitoring keeps working even if the cluster itself is unreachable.
 #
 # No target is deployed yet, so this is a no-op: it just logs cron-vs-actual
 # start time so the operator can observe GitHub Actions' real scheduling drift

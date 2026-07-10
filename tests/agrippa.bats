@@ -3,8 +3,7 @@
 # Gestalt feature test for the Agrippa platform.
 #
 # One black-box, end-to-end smoke test of the whole deployed platform, probed
-# from outside the cluster. It encodes the platform's user-visible contract from
-# ailly/developer/2026-06-10-A-agrippa/design.md:
+# from outside the cluster. It encodes the platform's user-visible contract:
 #
 #   1. Public site is alive      -> davidsouther.com/healthz returns 2xx within 1s
 #   2. Authenticated route gated  -> trips.davidsouther.com is challenged by
@@ -40,7 +39,11 @@ setup() {
 }
 
 @test "public site is alive: davidsouther.com/healthz returns 2xx within 1s" {
-  run curl -sS -o /dev/null -w '%{http_code}' --max-time 1 \
+  # DEV presents a real cert from the local CA, deliberately not in the host
+  # trust store; tolerate it with -k. PROD is unchanged.
+  local k_flag=()
+  [ "${ENV}" = "dev" ] && k_flag=(-k)
+  run curl -sS "${k_flag[@]}" -o /dev/null -w '%{http_code}' --max-time 1 \
     "https://${PUBLIC_HOST}/healthz"
   # curl exits 0 only if the whole exchange finished inside the 1s liveness budget.
   [ "$status" -eq 0 ]
@@ -48,10 +51,11 @@ setup() {
 }
 
 @test "observability is reachable: dashboard.davidsouther.com (dev=authenticated render, prod=liveness)" {
-  if [ "${GESTALT_ENV}" = "dev" ]; then
+  if [ "${ENV}" = "dev" ]; then
     # DEV: authenticate with local-only hardcoded test credentials and confirm a
-    # Grafana dashboard actually renders for the operator.
-    run curl -sS -o /dev/null -w '%{http_code}' --max-time 5 \
+    # Grafana dashboard actually renders for the operator. -k tolerates the
+    # local, untrusted-by-design CA.
+    run curl -sS -k -o /dev/null -w '%{http_code}' --max-time 5 \
       -u "${GRAFANA_USER}:${GRAFANA_PASSWORD}" \
       "https://${DASHBOARD_HOST}/api/dashboards/home"
     [ "$status" -eq 0 ]
@@ -66,11 +70,20 @@ setup() {
   fi
 }
 
-@test "authenticated route is gated: trips.davidsouther.com challenges anonymous users via Cloudflare Access" {
-  run curl -sS -D - -o /dev/null --max-time 5 "https://${TRIPS_HOST}/"
-  [ "$status" -eq 0 ]
-  # The edge must redirect to the Access login, not serve the app (never a 2xx).
-  echo "$output" | grep -Eqi '^HTTP/[0-9.]+ 302'
-  # And the challenge must be Cloudflare Access specifically, not any other redirect.
-  echo "$output" | grep -Eqi '^location:[[:space:]]*https?://[^[:space:]]*cloudflareaccess\.com'
+@test "authenticated route is gated: trips.davidsouther.com challenges anonymous users via Cloudflare Access (prod) or is plainly reachable (dev)" {
+  if [ "${ENV}" = "dev" ]; then
+    # DEV: local trips is served publicly with no Keycloak/Access gating --
+    # assert plain reachability (2xx or redirect) from the local ingress.
+    # -k tolerates the local CA.
+    run curl -sS -k -o /dev/null -w '%{http_code}' --max-time 5 "https://${TRIPS_HOST}/"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ ^(2[0-9][0-9]|3[0-9][0-9])$ ]]
+  else
+    run curl -sS -D - -o /dev/null --max-time 5 "https://${TRIPS_HOST}/"
+    [ "$status" -eq 0 ]
+    # The edge must redirect to the Access login, not serve the app (never a 2xx).
+    echo "$output" | grep -Eqi '^HTTP/[0-9.]+ 302'
+    # And the challenge must be Cloudflare Access specifically, not any other redirect.
+    echo "$output" | grep -Eqi '^location:[[:space:]]*https?://[^[:space:]]*cloudflareaccess\.com'
+  fi
 }

@@ -1,0 +1,21 @@
+# Platform owns ArgoCD self-management, keycloak, forgejo, & flagsmith
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DavidSouther/agrippa.git
+    targetRevision: main
+    path: platform/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

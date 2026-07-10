@@ -93,8 +93,8 @@ through `sops`/`helm-secrets` in the pre-ArgoCD bootstrap. Only the `age` privat
 - The ArgoCD repo-server gets an init container installing `sops`/`kustomize`/`ksops`, with a
   volume mount of the `sops-age` Secret; KSOPS decrypts sops-encrypted manifests during
   `kustomize build`, transparently to every downstream Application.
-- Encrypted secret manifests (e.g. `storage/postgres/secret.enc.yaml`) are referenced by their
-  kustomization and resolve at sync time.
+- Encrypted secret manifests (e.g. `secrets/dev/storage/postgres/secret.enc.yaml`) are referenced
+  by their kustomization and resolve at sync time.
 - ExternalDNS and cert-manager's Cloudflare/DigitalOcean tokens are committed as sops-encrypted
   Secrets and decrypted the same way — one `age` trust root per environment, not a duplicated
   credential store.

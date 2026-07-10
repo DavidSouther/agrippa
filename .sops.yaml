@@ -1,0 +1,7 @@
+# PLACEHOLDER recipient -- replace with the real agrippa-age-dev public key
+# (age-keygen; private half stored in Bitwarden as agrippa-age-dev) before any
+# secret under secrets/dev/ can actually be decrypted. `mise run rotate-keys`
+# updates this file automatically on future rotations.
+creation_rules:
+  - path_regex: ^secrets/dev/.*$
+    age: "AGE-PLACEHOLDER-REPLACE-WITH-REAL-agrippa-age-dev-PUBLIC-KEY"

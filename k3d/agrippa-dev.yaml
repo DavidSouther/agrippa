@@ -1,0 +1,37 @@
+# Local Agrippa development cluster (k3d).
+#
+# Applied by `mise run cluster:up` and removed by `mise run cluster:down`.
+#
+#   - Single node (1 server, 0 agents): lightest footprint for a laptop dev box;
+#     k3s schedules workloads on the server, so no separate agent is needed. No
+#     GPU pool.
+#   - Replace ServiceLB (Klipper) with metallb.
+#   - Replace Traefik with Istio Gateway for ingress.
+#   - Host ports 80/443 published through the k3d loadbalancer to Istio Gateway.
+#   - k3s image pinned for reproducibility across k3d upgrades.
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: agrippa-dev
+servers: 1
+agents: 0
+image: rancher/k3s:v1.35.5-k3s1
+ports:
+  - port: "80:80"
+    nodeFilters:
+      - loadbalancer
+  - port: "443:443"
+    nodeFilters:
+      - loadbalancer
+options:
+  k3d:
+    wait: true
+    timeout: "120s"
+  k3s:
+    extraArgs:
+      - arg: "--disable=servicelb"
+        nodeFilters:
+          - "server:*"
+      - arg: "--disable=traefik"
+        nodeFilters:
+          - "server:*"
