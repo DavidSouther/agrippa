@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# Prober for scripts/rotate-keys.sh's Stage 5: does the SOPS_AGE_KEY handoff
+# Prober for scripts/rotate-keys.sh: does the SOPS_AGE_KEY handoff
 # from an archived Bitwarden item actually let `sops updatekeys` re-encrypt an
 # already-committed secret under the new recipient, and drop old-key access?
 #
