@@ -1,10 +1,3 @@
-# Wave 0: the single shared Postgres Cluster `postgres`. `imageName` is pinned
-# explicitly (never floats on the operator's compiled-in default) to the CNPG
-# 1.30.0 operator's own current default -- ghcr.io/cloudnative-pg/postgresql:
-# 18.4-system-trixie (research:public, cloudnative-pg/cloudnative-pg
-# release-1.30 pkg/versions.DefaultImageName; confirmed pullable on GHCR).
-# The design's "17.6 if on the 17 line" guardrail is vacuous here: CNPG's
-# current stable default major is 18, not 17.
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
