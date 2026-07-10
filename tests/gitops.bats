@@ -40,7 +40,7 @@ setup() {
 
 # Echoes "<sync> <health>" for an ArgoCD Application, e.g. "Synced Healthy".
 app_status() {
-  mise x kubectl --context "$CTX" -n "$NS" get application "$1" \
+  mise x kubectl -- kubectl --context "$CTX" -n "$NS" get application "$1" \
     -o jsonpath='{.status.sync.status} {.status.health.status}' 2>/dev/null
 }
 
@@ -65,13 +65,13 @@ wait_for_synced_healthy() {
   [ "$status" -eq 0 ]
 
   # THEN 1: the sops-age trust root exists in the argocd namespace.
-  run kubectl --context "$CTX" -n "$NS" get secret sops-age
+  run mise x kubectl -- kubectl --context "$CTX" -n "$NS" get secret sops-age
   [ "$status" -eq 0 ]
 
   # THEN 2: the repo-server is KSOPS-enabled (it mounts the sops-age key and
   # carries the ksops decrypt init-container). This proves a DECRYPTING ArgoCD,
   # not merely an ArgoCD.
-  run kubectl --context "$CTX" -n "$NS" get deployment argocd-repo-server -o yaml
+  run mise x kubectl -- kubectl --context "$CTX" -n "$NS" get deployment argocd-repo-server -o yaml
   [ "$status" -eq 0 ]
   echo "$output" | grep -qi ksops
   echo "$output" | grep -q sops-age
@@ -83,7 +83,7 @@ wait_for_synced_healthy() {
   # THEN 4: the five-layer app-of-apps skeleton is registered and ready to receive
   # later feature-steps' Applications.
   for layer in core storage platform observability workloads; do
-    run kubectl --context "$CTX" -n "$NS" get application "$layer"
+    run mise x kubectl -- kubectl --context "$CTX" -n "$NS" get application "$layer"
     [ "$status" -eq 0 ]
   done
 }

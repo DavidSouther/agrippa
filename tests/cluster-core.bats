@@ -32,7 +32,7 @@ setup() {
 
 wait_for_node_ready() {
   for _ in $(seq 1 30); do
-    if kubectl --context "$CONTEXT" get nodes --no-headers 2>/dev/null | grep -qw Ready; then
+    if mise x kubectl -- kubectl --context "$CONTEXT" get nodes --no-headers 2>/dev/null | grep -qw Ready; then
       return 0
     fi
     sleep 2
@@ -51,18 +51,19 @@ wait_for_node_ready() {
   [ "$status" -eq 0 ]
 
   # THEN 2: Traefik is disabled
-  run mise x kubectl --context "$CONTEXT" -n kube-system get pods --no-headers
+  run mise x kubectl -- kubectl --context "$CONTEXT" -n kube-system get pods --no-headers
   [ "$status" -eq 0 ]
   ! echo "$output" | grep -qi traefik
 
-  # THEN 3: ServiceLB (Klipper) is disabled
-  run mise x docker inspect --format '{{json .Args}}' "k3d-${CLUSTER}-server-0"
+  # THEN 3: ServiceLB (Klipper) is disabled. docker itself is a host prerequisite,
+  # not a mise-pinned tool (absent from mise.toml's [tools]), so it runs unwrapped.
+  run docker inspect --format '{{json .Args}}' "k3d-${CLUSTER}-server-0"
   [ "$status" -eq 0 ]
   echo "$output" | grep -q -- "--disable=servicelb"
 
   # THEN 4: host port 443 is published through the k3d loadbalancer proxy, so
   # host :443 reaches the in-cluster gateway once Networking (Istio) lands.
-  run mise x docker port "k3d-${CLUSTER}-serverlb"
+  run docker port "k3d-${CLUSTER}-serverlb"
   [ "$status" -eq 0 ]
   echo "$output" | grep -q "443"
 }

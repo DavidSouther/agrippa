@@ -12,8 +12,9 @@
 # Run:  bats tests/rotate-keys.bats
 #
 # Requires: bats-core, sops, age (age-keygen), jq, yq -- all pinned by
-# mise.toml (`mise exec -- bats tests/rotate-keys.bats` if they aren't
-# already on PATH).
+# mise.toml. Each call below runs through `mise x <tool> -- ...` so the suite
+# is version-pinned regardless of whether the invoking shell has activated
+# mise itself.
 
 setup() {
   REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
@@ -78,8 +79,8 @@ STUB
   # GIVEN: an existing Bitwarden item for this env holding an OLD age identity,
   # a .sops.yaml scoping secrets/citest/.* to its recipient, and a secret
   # already committed and encrypted under that OLD recipient.
-  identity_old="$(age-keygen 2>/dev/null)"
-  jq -n --arg id "old-1" --arg name "agrippa-age-${ENV_NAME}" --arg notes "$identity_old" \
+  identity_old="$(mise x age -- age-keygen 2>/dev/null)"
+  mise x jq -- jq -n --arg id "old-1" --arg name "agrippa-age-${ENV_NAME}" --arg notes "$identity_old" \
     '[{id: $id, name: $name, notes: $notes}]' > "$FAKE_BW_VAULT"
 
   recipient_old="$(printf '%s\n' "$identity_old" | grep '^# public key: ' | sed -E 's/^# public key: //')"
@@ -95,7 +96,7 @@ metadata:
 stringData:
   password: hunter2
 EOF
-  run sops --config .sops.yaml -e -i "secrets/${ENV_NAME}/example.enc.yaml"
+  run mise x sops -- sops --config .sops.yaml -e -i "secrets/${ENV_NAME}/example.enc.yaml"
   [ "$status" -eq 0 ]
 
   # WHEN: rotate-keys runs against this env, confirming the interactive prompt.
@@ -104,31 +105,31 @@ EOF
 
   # THEN 1: the old item is archived under a distinct, dated name -- not
   # deleted -- so its identity is still recoverable in the vault.
-  archived_name="$(jq -r --arg id "old-1" '.[] | select(.id == $id) | .name' "$FAKE_BW_VAULT")"
+  archived_name="$(mise x jq -- jq -r --arg id "old-1" '.[] | select(.id == $id) | .name' "$FAKE_BW_VAULT")"
   echo "$archived_name" | grep -qE "^agrippa-age-${ENV_NAME} \(archived [0-9]{4}-[0-9]{2}-[0-9]{2}\)\$"
-  archived_notes="$(jq -r --arg id "old-1" '.[] | select(.id == $id) | .notes' "$FAKE_BW_VAULT")"
+  archived_notes="$(mise x jq -- jq -r --arg id "old-1" '.[] | select(.id == $id) | .notes' "$FAKE_BW_VAULT")"
   [ "$archived_notes" = "$identity_old" ]
 
   # THEN 2: a new, live item now holds a different identity under the
   # original name.
-  new_notes="$(jq -r --arg name "agrippa-age-${ENV_NAME}" '.[] | select(.name == $name) | .notes' "$FAKE_BW_VAULT")"
+  new_notes="$(mise x jq -- jq -r --arg name "agrippa-age-${ENV_NAME}" '.[] | select(.name == $name) | .notes' "$FAKE_BW_VAULT")"
   [ -n "$new_notes" ]
   [ "$new_notes" != "$identity_old" ]
 
   # THEN 3: .sops.yaml's recipient for this env now matches the new identity.
   export CHECK_PATH_REGEX="^secrets/${ENV_NAME}/.*\$"
-  sops_yaml_age="$(yq '.creation_rules[] | select(.path_regex == env(CHECK_PATH_REGEX)) | .age' .sops.yaml)"
+  sops_yaml_age="$(mise x yq -- yq '.creation_rules[] | select(.path_regex == env(CHECK_PATH_REGEX)) | .age' .sops.yaml)"
   unset CHECK_PATH_REGEX
   recipient_new="$(printf '%s\n' "$new_notes" | grep '^# public key: ' | sed -E 's/^# public key: //')"
   [ "$sops_yaml_age" = "$recipient_new" ]
 
   # THEN 4: the already-committed secret now decrypts under the NEW key...
-  run env SOPS_AGE_KEY="$new_notes" sops -d "secrets/${ENV_NAME}/example.enc.yaml"
+  run env SOPS_AGE_KEY="$new_notes" mise x sops -- sops -d "secrets/${ENV_NAME}/example.enc.yaml"
   [ "$status" -eq 0 ]
   echo "$output" | grep -q "hunter2"
 
   # ...and no longer under the OLD key -- rotation actually dropped old
   # access, it didn't just add the new key alongside it.
-  run env SOPS_AGE_KEY="$identity_old" sops -d "secrets/${ENV_NAME}/example.enc.yaml"
+  run env SOPS_AGE_KEY="$identity_old" mise x sops -- sops -d "secrets/${ENV_NAME}/example.enc.yaml"
   [ "$status" -ne 0 ]
 }
