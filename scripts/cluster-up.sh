@@ -3,7 +3,6 @@ set -euo pipefail
 CLUSTER="agrippa-dev"
 CONFIG="k3d/agrippa-dev.yaml"
 if k3d cluster list "$CLUSTER" >/dev/null 2>&1; then
-  # Already exists: make sure it is started (idempotent re-run), don't recreate.
   echo "cluster:up: $CLUSTER already exists; ensuring it is started"
   k3d cluster start "$CLUSTER"
 else
