@@ -1,7 +1,3 @@
-# core layer: metallb, Gateway API CRDs, cert-manager & Istio ambient, plus
-# the shared Gateway/HTTPRoute contract. Composed at four intra-core
-# sync-waves (-10 CRDs, -5 controllers, 0 config CRs, 5 ingress objects) --
-# see each nested kustomization's own commonAnnotations for its wave.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
