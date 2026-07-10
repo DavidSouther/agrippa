@@ -1,29 +1,25 @@
-# ArgoCD's install kustomization: the pinned upstream install manifest plus a
-# KSOPS repo-server patch so `kustomize build` can decrypt sops-encrypted
-# manifests (DEVELOPMENT.md ## Secrets). Applied once by `mise run bootstrap`
-# (scripts/bootstrap.sh stage 3); reconciled thereafter by the `argocd`
-# Application inside platform/overlays/dev (Step 3), so ArgoCD manages its own
+# ArgoCD's install kustomization. Includes KSOPS repo-server patch so
+# `kustomize build` can decrypt sops-encrypted manifests.
+#
+# Applied once by `mise run bootstrap`; reconciled thereafter by the `argocd`
+# Application inside platform/overlays/dev so ArgoCD manages its own
 # install from the same source the manual bootstrap used.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# install.yaml's resources don't set metadata.namespace (they rely on the
-# applier to inject it); this transformer does that for every resource here.
 namespace: argocd
 
 resources:
-  # Pinned to v3.4.4 (current stable at build time, cross-checked against
-  # https://github.com/argoproj/argo-cd/releases). Non-HA, single-manifest
-  # install: CRDs, RBAC, and every ArgoCD component.
+  # Pinned to v3.4.4 (current stable 2026-07-10). Non-HA, single-manifest
+  # install: CRDs, RBAC, and ArgoCD components.
   - https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.4/manifests/install.yaml
 
 patches:
-  # KSOPS (viaduct-ai/kustomize-sops) repo-server integration: an init
+  # KSOPS (viaduct-ai/kustomize-sops) integration: an init
   # container installs the ksops+kustomize binaries into a shared emptyDir,
   # the main container mounts them over its own /usr/local/bin copies, and a
-  # second volume mounts the sops-age Secret (Step 1's trust root) so
-  # SOPS_AGE_KEY_FILE resolves to the age private key at decrypt time. Field
-  # shape per https://github.com/viaduct-ai/kustomize-sops/blob/master/README.md.
+  # second volume mounts the sops-age Secret so SOPS_AGE_KEY_FILE resolves to
+  # the age private key at decrypt time.
   - target:
       kind: Deployment
       name: argocd-repo-server
@@ -63,13 +59,9 @@ patches:
                   - name: XDG_CONFIG_HOME
                     value: /.config
                   - name: SOPS_AGE_KEY_FILE
-                    # matches the key.txt data key bootstrap.sh's Stage 2
-                    # creates the sops-age Secret with (Step 1).
+                    # matches the key.txt data key in bootstrap.sh
                     value: /.config/sops/age/key.txt
-  # kustomize.buildOptions must allow the ksops exec plugin to run; this key
-  # merges into install.yaml's existing argocd-cm ConfigMap without touching
-  # its other data keys (strategic-merge patch of a plain data map merges by
-  # key, per Kubernetes ConfigMap semantics).
+  # kustomize.buildOptions must allow the ksops exec plugin to run
   - target:
       kind: ConfigMap
       name: argocd-cm
