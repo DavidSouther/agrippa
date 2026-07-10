@@ -32,19 +32,27 @@ helmCharts:
               type: loki
               access: proxy
               url: http://loki.observability.svc:3100
-              # Explicit, stable uid (Grafana otherwise auto-derives one) so
-              # provisioned dashboard JSON can reference it directly.
-              uid: loki
+              # Pinned to the uid Grafana already auto-derived and persisted
+              # to its SQLite PVC on first provision (read live via
+              # `GET /api/datasources`, not re-derived) -- Grafana does not
+              # support reassigning a previously-provisioned datasource's
+              # uid against existing PVC state (confirmed live: doing so
+              # once put the datasource-provisioning module into a
+              # permanent Failed state, crash-looping the pod). Pinning to
+              # the existing value keeps this declaration a no-op against
+              # live state while still giving the dashboard JSON below a
+              # stable, explicit uid to reference.
+              uid: P8E80F9AEF21F6940
             - name: Mimir
               type: prometheus
               access: proxy
               url: http://mimir-gateway.observability.svc/prometheus
-              uid: mimir
+              uid: PAE45454D0EDB9216
             - name: Tempo
               type: tempo
               access: proxy
               url: http://tempo.observability.svc:3200
-              uid: tempo
+              uid: P214B5B846CF3925F
       dashboardProviders:
         dashboardproviders.yaml:
           apiVersion: 1
@@ -105,7 +113,7 @@ helmCharts:
                     },
                     "datasource": {
                       "type": "prometheus",
-                      "uid": "mimir"
+                      "uid": "PAE45454D0EDB9216"
                     },
                     "targets": [
                       {
@@ -142,7 +150,7 @@ helmCharts:
                     },
                     "datasource": {
                       "type": "prometheus",
-                      "uid": "mimir"
+                      "uid": "PAE45454D0EDB9216"
                     },
                     "targets": [
                       {
@@ -179,7 +187,7 @@ helmCharts:
                     },
                     "datasource": {
                       "type": "prometheus",
-                      "uid": "mimir"
+                      "uid": "PAE45454D0EDB9216"
                     },
                     "targets": [
                       {
@@ -233,7 +241,7 @@ helmCharts:
                     },
                     "datasource": {
                       "type": "prometheus",
-                      "uid": "mimir"
+                      "uid": "PAE45454D0EDB9216"
                     },
                     "targets": [
                       {
@@ -270,7 +278,7 @@ helmCharts:
                     },
                     "datasource": {
                       "type": "prometheus",
-                      "uid": "mimir"
+                      "uid": "PAE45454D0EDB9216"
                     },
                     "targets": [
                       {
@@ -317,7 +325,7 @@ helmCharts:
                     },
                     "datasource": {
                       "type": "prometheus",
-                      "uid": "mimir"
+                      "uid": "PAE45454D0EDB9216"
                     },
                     "targets": [
                       {
@@ -364,7 +372,7 @@ helmCharts:
                     },
                     "datasource": {
                       "type": "prometheus",
-                      "uid": "mimir"
+                      "uid": "PAE45454D0EDB9216"
                     },
                     "targets": [
                       {
@@ -403,7 +411,7 @@ helmCharts:
                     },
                     "datasource": {
                       "type": "prometheus",
-                      "uid": "mimir"
+                      "uid": "PAE45454D0EDB9216"
                     },
                     "targets": [
                       {
@@ -450,7 +458,7 @@ helmCharts:
                     },
                     "datasource": {
                       "type": "prometheus",
-                      "uid": "mimir"
+                      "uid": "PAE45454D0EDB9216"
                     },
                     "targets": [
                       {
@@ -490,7 +498,7 @@ helmCharts:
                     },
                     "datasource": {
                       "type": "prometheus",
-                      "uid": "mimir"
+                      "uid": "PAE45454D0EDB9216"
                     },
                     "targets": [
                       {
@@ -532,7 +540,7 @@ helmCharts:
                     },
                     "datasource": {
                       "type": "prometheus",
-                      "uid": "mimir"
+                      "uid": "PAE45454D0EDB9216"
                     },
                     "targets": [
                       {
