@@ -10,6 +10,22 @@
 # referenced, since helmCharts: valuesInline can't layer an extra values
 # file. This keeps the deployment to a single-node, minimal-footprint shape.
 #
+# classic-architecture.yaml sets ingester.push_grpc_method_enabled: null,
+# relying on `helm install`/`helm template`'s own values-merge to drop the
+# key so Mimir's ingester falls back to its own default (true). kustomize's
+# helmCharts: inflation does not preserve that null the same way -- verified
+# by rendering this exact valuesInline through both `kustomize build
+# --enable-helm` and plain `helm template`: kustomize resolves the key back
+# to the base config's hardcoded `false` ("Disallow Push gRPC API; everything
+# comes through Kafka in the ingest storage architecture"), which would
+# reject every distributor->ingester write in this Kafka-less classic setup.
+# Set explicitly to `true` below instead of `null` so it survives kustomize's
+# merge. The other two classic-architecture.yaml nulls (distributor's
+# remote_timeout, ingest_storage's kafka.* fields) hit the same kustomize
+# limitation, but are inert either way once ingest_storage.enabled: false
+# takes effect (a concrete override, unaffected by this caveat) -- omitted
+# below rather than kept as no-op nulls.
+#
 # ingester and store_gateway both default zoneAwareReplication.enabled: true
 # (3 logical zones, sharding a component's total replicas across all three,
 # so the chart's own default replicas render THREE ingester StatefulSets, not
@@ -50,14 +66,8 @@ helmCharts:
         structuredConfig:
           ingest_storage:
             enabled: false
-            kafka:
-              address: null
-              topic: null
-              auto_create_topic_default_partitions: null
-          distributor:
-            remote_timeout: null
           ingester:
-            push_grpc_method_enabled: null
+            push_grpc_method_enabled: true
       ingester:
         replicas: 1
         zoneAwareReplication:
