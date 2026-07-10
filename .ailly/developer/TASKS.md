@@ -95,6 +95,11 @@ into this platform's GitOps/Terraform management, not a fresh design.
   Does not block any live secret or the running cluster's `sops-age` trust
   root — only the rotation *test path* itself is broken.
 
+  **Resolved.** `scripts/rotate-keys.sh` ran its re-encrypt stage before its
+  `.sops.yaml`-update stage, so `sops updatekeys` always saw the stale
+  recipient and no-opped. Fixed by reordering the two stages so `.sops.yaml`
+  is updated first; `tests/rotate-keys.bats` is green.
+
 ## Future targets
 
 - **Home lab (on-prem) as a third substrate.** Not in scope for the current
