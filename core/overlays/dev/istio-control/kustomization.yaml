@@ -1,16 +1,6 @@
 # Istio ambient's control plane and data plane -- istiod, theistio-cni node agent, and ztunnel.
 #
-# The `cni` chart deliberately OMITS `global.platform: k3d` (unlike istiod/
-# ztunnel below): live-verified this session (`helm template` isolation) that
-# the chart's own bundled k3d platform profile
-# (files/profile-platform-k3d.yaml) nests cniConfDir/cniBinDir under a `cni:`
-# key that a later template (zzy_descope_legacy.yaml, sorted to run AFTER the
-# profile-flatten template due to Helm's reverse-lexicographic same-directory
-# sort) re-promotes to top level, silently clobbering this file's explicit
-# overrides -- known upstream gap, istio/istio#57110 (the k3d profile's /bin
-# predates k3s moving CNI binaries to /var/lib/rancher/k3s/data/cni). Omitting
-# `platform: k3d` here is the surgical fix; only this chart's k3d profile
-# touches cni paths, so nothing else is lost.
+# The `cni` chart deliberately OMITS `global.platform: k3d` to avoid clobbering overrides; see istio/istio#57110
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
