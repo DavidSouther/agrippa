@@ -14,12 +14,8 @@ if [ -d charts ]; then
   while IFS= read -r -d '' f; do manifests+=("$f"); done \
     < <(find charts -type f -path '*/rendered/*' \( -name '*.yaml' -o -name '*.yml' \) ! -name 'kustomization.yaml' -print0)
 fi
-# secrets/ carries sops-encrypted manifests -- every field (including `kind`)
-# is ciphertext, so kubeconform -strict would either fail to recognize the
-# resource or flag it against the wrong schema. conftest's plaintext-Secret
-# guard (tests/policy/secrets.rego) still applies: it only denies a literal
-# `kind: Secret` with plaintext data, so an encrypted manifest and the
-# secret-generator.yaml (kind: ksops) both pass trivially.
+# Don't check secrets/, as their ciphertext would be flagged as a secret.
+# conftest's plaintext-Secret guard still applies
 secrets_manifests=()
 if [ -d secrets ]; then
   while IFS= read -r -d '' f; do secrets_manifests+=("$f"); done \
@@ -31,10 +27,7 @@ if [ -z "${manifests[*]:-}" ] && [ -z "${secrets_manifests[*]:-}" ]; then
 fi
 rc=0
 if [ -n "${manifests[*]:-}" ]; then
-  # -ignore-missing-schemas: kubeconform ships no schema for CRDs like
-  # ArgoCD's argoproj.io Application, so a resource kubeconform can't find a
-  # schema for is Skipped rather than an Error; built-in Kubernetes kinds are
-  # still validated.
+  # kubeconform don't ship a schema
   kubeconform -strict -ignore-missing-schemas -summary "${manifests[@]}" || rc=1
   conftest test --policy tests/policy --all-namespaces "${manifests[@]}" || rc=1
 fi
