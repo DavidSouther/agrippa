@@ -1,0 +1,41 @@
+# Shared standalone Valkey instance
+#
+# auth.aclUsers is a map keyed by username; each user's password is read
+# from usersExistingSecret at a key defaulting to that same username,
+# so smoke-valkey's `default`/`smoke` keys need no explicit passwordKey override.
+# The chart requires a `default` user whenever auth.enabled is true.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "0"
+helmCharts:
+  - name: valkey
+    repo: https://valkey.io/valkey-helm/
+    version: 0.10.0
+    releaseName: valkey
+    namespace: storage
+    # kustomize's helmCharts inflation renders the chart's `helm.sh/hook: test
+    # Pod` as a literal, permanent Pod -- ArgoCD doesn't understand Helm hook
+    # annotations, so it wouldn't run as a one-shot `helm test`.
+    skipTests: true
+    valuesInline:
+      auth:
+        enabled: true
+        usersExistingSecret: smoke-valkey
+        aclUsers:
+          default:
+            permissions: "~* &* +@all"
+          smoke:
+            permissions: "~smoke:* +@all"
+      dataStorage:
+        enabled: true
+        className: local-path
+        requestedSize: 512Mi
+# Workaround for kubernetes-sigs/kustomize#6058
+patches:
+  - target:
+      labelSelector: "app.kubernetes.io/instance=valkey"
+    patch: |-
+      - op: add
+        path: /metadata/namespace
+        value: storage

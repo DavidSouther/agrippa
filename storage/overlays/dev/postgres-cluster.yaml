@@ -1,0 +1,19 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres
+  namespace: storage
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie
+  storage:
+    storageClass: local-path
+    size: 1Gi
+  managed:
+    roles:
+      - name: smoke
+        login: true
+        passwordSecret:
+          name: smoke-db

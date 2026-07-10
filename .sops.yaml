@@ -4,4 +4,4 @@
 # updates this file automatically on future rotations.
 creation_rules:
   - path_regex: ^secrets/dev/.*$
-    age: "AGE-PLACEHOLDER-REPLACE-WITH-REAL-agrippa-age-dev-PUBLIC-KEY"
+    age: "age1e8wr0f85w0yfqgxc3pc6426ghlu5xt069znn5yuwrtwz30u23quqjcx6vc"

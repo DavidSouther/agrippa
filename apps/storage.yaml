@@ -6,6 +6,11 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "1"
+    # See apps/core.yaml:9-14's compare-options comment for the general
+    # SMD-mispredicts/ServerSideDiff-fixes-it rationale (argoproj/argo-cd#22151).
+    # Here it additionally mispredicts CNPG's mutating-webhook-defaulted Cluster
+    # fields
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: default
   source:
@@ -19,3 +24,11 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    # See apps/core.yaml:29-35's syncOptions comment for the general
+    # ServerSideApply/SkipDryRunOnMissingResource rationale. Here,
+    # SkipDryRunOnMissingResource additionally lets the Cluster /
+    # Database CRs sync before CNPG's own CRDs are dry-run-validatable
+    # on the very first apply.
+    syncOptions:
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true

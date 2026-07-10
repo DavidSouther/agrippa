@@ -1,0 +1,12 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: smoke
+  namespace: storage
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  name: smoke
+  owner: smoke
+  cluster:
+    name: postgres
