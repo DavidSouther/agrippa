@@ -1,14 +1,4 @@
-# Wave 5: Istio-native TLS re-origination to the HTTPS argocd-server:443
-# backend. Gateway API's BackendTLSPolicy was rejected here: it requires
-# caCertificateRefs/wellKnownCACertificates and validates the backend's
-# SAN, with no verification-skip (that's still an open, unmerged proposal
-# upstream) -- unworkable against argocd-server's self-signed,
-# install-regenerated cert without extracting and resyncing its CA. A bare
-# HTTPRoute backendRefs to port 443 does not itself originate TLS to the
-# backend, so this DestinationRule (SIMPLE + insecureSkipVerify) is what
-# makes the gateway proxy (a full Envoy even in ambient mode for a
-# north-south gatewayClassName: istio Gateway) speak TLS to that backend
-# while tolerating its self-signed cert.
+# Istio-native TLS re-origination to the HTTPS argocd-server:443 backend.
 apiVersion: networking.istio.io/v1
 kind: DestinationRule
 metadata:
