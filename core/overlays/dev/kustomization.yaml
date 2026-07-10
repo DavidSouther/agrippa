@@ -1,6 +1,3 @@
-# Empty-but-valid placeholder: apps/core.yaml's Application syncs this path
-# and must reach zero-resource Synced/Healthy trivially until a later
-# feature-step (cert-manager, Gateway API, Istio, metallb) lands real content.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources: []
