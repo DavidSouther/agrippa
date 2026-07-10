@@ -14,7 +14,9 @@ helmCharts:
     version: 0.10.0
     releaseName: valkey
     namespace: storage
-    # ArgoCD doesn't understand Helm hook annotations, which would read "helm.sh/hook: test Pod" as a specific, permanent pod.
+    # kustomize's helmCharts inflation renders the chart's `helm.sh/hook: test
+    # Pod` as a literal, permanent Pod -- ArgoCD doesn't understand Helm hook
+    # annotations, so it wouldn't run as a one-shot `helm test`.
     skipTests: true
     valuesInline:
       auth:

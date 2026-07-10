@@ -53,10 +53,10 @@ patches:
                   - name: custom-tools
                     mountPath: /usr/local/bin/ksops
                     subPath: ksops
-                  # Work around viaduct-ai/kustomize-sops#283, #207, #164 
+                  # Work around viaduct-ai/kustomize-sops#283, #207, #164
                   #
                   # kustomize's exec-plugin loader resolves `kind: ksops`
-                  # generators via $XDG_CONFIG_HOME/kustomize/plugin/<apiVersion>/kind/<Kind>
+                  # generators via $XDG_CONFIG_HOME/kustomize/plugin/<apiVersion>/<lowercased kind>/<Kind>
                   # /usr/local/bin/ksops mount above only covers direct CLI invocation
                   - name: custom-tools
                     mountPath: /.config/kustomize/plugin/viaduct.ai/v1/ksops/ksops
