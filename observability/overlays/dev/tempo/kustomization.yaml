@@ -1,8 +1,6 @@
 # Wave 0: Tempo (single-binary "tempo" chart, not tempo-distributed; -target=all
 # monolithic mode is the chart's only mode). Chart moved to
-# grafana-community.github.io/helm-charts (research:public, re-verified live
-# at build, confirming this feature-step's own research prediction) --
-# version 2.2.3, the newest release as of this build.
+# grafana-community.github.io/helm-charts.
 #
 # tempo.storage.trace.backend: local (with local wal/chunk paths) is already
 # the chart's own default -- kept implicit; only persistence needs an
