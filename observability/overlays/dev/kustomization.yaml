@@ -1,7 +1,7 @@
-# Observability layer: Loki, Tempo, Mimir, Grafana, and Alloy composed at two
-# intra-observability sync-waves (-10 namespace, 0 the LGTM stores, 5 Grafana +
-# Alloy + the Grafana HTTPRoute) -- see each nested kustomization's own
-# commonAnnotations for its wave.
+# Observability layer: Loki, Tempo, Mimir, Grafana, and Alloy composed at
+# three intra-observability sync-waves (-10 namespace, 0 the LGTM stores, 5
+# Grafana + Alloy + the Grafana HTTPRoute) -- see each nested kustomization's
+# own commonAnnotations for its wave.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
