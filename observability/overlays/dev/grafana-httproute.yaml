@@ -1,10 +1,9 @@
 # Wave 5: routes the Grafana dev host through the shared Gateway to the
-# Grafana Service (plain HTTP -- confirmed live against the pinned chart's
-# service.yaml default; no DestinationRule needed, unlike ArgoCD's HTTPS
-# backend). `matches` is authored explicitly, matching the Gateway API CRD's
-# own schema default for an omitted rule (PathPrefix "/") -- the Networking
-# feature-step's own found-and-fixed omitted-`matches` SMD-diff caveat
-# (core/overlays/dev/argocd-httproute.yaml), reused verbatim here.
+# Grafana Service. Plain HTTP backend, so no DestinationRule is needed here
+# (unlike ArgoCD's HTTPS backend; see core/overlays/dev/argocd-destinationrule.yaml).
+# `matches` is authored explicitly, matching the Gateway API CRD's own schema
+# default for an omitted rule (PathPrefix "/"), since an omitted `matches`
+# otherwise mispredicts under ServerSideDiff.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
