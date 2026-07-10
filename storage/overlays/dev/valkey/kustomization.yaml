@@ -1,11 +1,9 @@
 # Shared standalone Valkey instance
 #
 # auth.aclUsers is a map keyed by username; each user's password is read
-# from usersExistingSecret at a key defaulting to that same username (chart
-# templates/_helpers.tpl + deploy_valkey.yaml), so smoke-valkey's `default`/
-# `smoke` keys need no explicit passwordKey override. The chart requires a
-# `default` user whenever auth.enabled is true (_helpers.tpl
-# validateAuthConfig), hence its entry below alongside `smoke`.
+# from usersExistingSecret at a key defaulting to that same username,
+# so smoke-valkey's `default`/`smoke` keys need no explicit passwordKey override.
+# The chart requires a `default` user whenever auth.enabled is true.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
