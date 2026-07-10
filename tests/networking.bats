@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 #
-# Feature test for Networking (Istio ambient + Gateway API + cert-manager +
-# metallb), roadmap item 3 / Feature 3 of the local k3d project.
+# Feature test for Networking: Istio ambient + Gateway API + cert-manager +
+# metallb
 #
 # Primary user story (Given / When / Then):
 #   Given the bootstrapped long-lived `agrippa-dev` k3d cluster (Features 1-2)
@@ -17,7 +17,7 @@
 #        self-signed default -- proving the Gateway + HTTPRoute + local-hostname +
 #        local-CA-TLS shared contract end-to-end.
 #
-# This is roadmap item 3 (Networking) in its k3d-only form: it stands in for the
+# This stands in for the
 # production Cloudflare edge (public DNS, public ACME TLS, cloudflared), since
 # both are cloud-only and out of scope for a local cluster, with a local CA
 # (real certs, deliberately not host-trusted -- probed with `curl -k`) and
@@ -26,15 +26,6 @@
 # UI-exposed feature-step (Auth, Observability, Workloads) consumes, and
 # resolves gitops-argocd's deferred "ArgoCD UI ingress" item by routing the
 # ArgoCD UI as this feature's zero-new-workload reachability proof.
-#
-# EXPECTED TO FAIL until Networking lands the `core/overlays/dev` composition
-# (metallb, Gateway API CRDs, cert-manager + the SelfSigned->CA issuer chain,
-# Istio ambient with the k3s CNI-path overrides, the shared Gateway + its local-CA
-# cert + the externalIPs reachability Service + the ArgoCD HTTPRoute) and ArgoCD
-# reconciles it. Before that, `core/overlays/dev` is the empty `resources: []`
-# placeholder, nothing listens on the Gateway, and `curl` returns a connection
-# failure (the research-confirmed negative-control behavior). That red state
-# defines "done" for this feature-step.
 #
 # NOTE: this suite deliberately does NOT tear the cluster or ArgoCD down. Both are
 # long-lived: every later feature-step reconciles into this same cluster. The
