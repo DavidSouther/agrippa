@@ -18,14 +18,14 @@
 #        local-CA-TLS shared contract end-to-end.
 #
 # This is roadmap item 3 (Networking) in its k3d-only form: it stands in for the
-# production Cloudflare edge (public DNS, public ACME TLS, cloudflared) with a
-# local CA (real certs, deliberately not host-trusted -- probed with `curl -k`,
-# research decision 3) and `*.nip.io` loopback hostnames reached through the k3d
-# port-map (research decision 2). It also DEFINES the shared Gateway/HTTPRoute/
-# hostname/TLS contract every later UI-exposed feature-step (Auth, Observability,
-# Workloads) consumes, and resolves gitops-argocd's deferred "ArgoCD UI ingress"
-# item by routing the ArgoCD UI as this feature's zero-new-workload reachability
-# proof.
+# production Cloudflare edge (public DNS, public ACME TLS, cloudflared), since
+# both are cloud-only and out of scope for a local cluster, with a local CA
+# (real certs, deliberately not host-trusted -- probed with `curl -k`) and
+# `*.nip.io` loopback hostnames reached through the k3d port-map. It also
+# DEFINES the shared Gateway/HTTPRoute/hostname/TLS contract every later
+# UI-exposed feature-step (Auth, Observability, Workloads) consumes, and
+# resolves gitops-argocd's deferred "ArgoCD UI ingress" item by routing the
+# ArgoCD UI as this feature's zero-new-workload reachability proof.
 #
 # EXPECTED TO FAIL until Networking lands the `core/overlays/dev` composition
 # (metallb, Gateway API CRDs, cert-manager + the SelfSigned->CA issuer chain,
@@ -42,8 +42,9 @@
 #
 # Run:  bats tests/networking.bats
 #
-# Requires: bats-core, curl, kubectl, and (for green) the running bootstrapped
-# `agrippa-dev` cluster with the Networking `core` content reconciled by ArgoCD.
+# Requires: bats-core, mise, curl, kubectl, and (for green) the running
+# bootstrapped `agrippa-dev` cluster with the Networking `core` content
+# reconciled by ArgoCD.
 #
 # GW_HOST overrides the target host so the same test could point at another dev
 # nip.io host if the reachability proof ever moves off the ArgoCD UI.
@@ -65,7 +66,7 @@ setup() {
 
 # Echoes "<sync> <health>" for the `core` ArgoCD Application, e.g. "Synced Healthy".
 core_app_status() {
-  kubectl --context "$CTX" -n argocd get application core \
+  mise x kubectl -- kubectl --context "$CTX" -n argocd get application core \
     -o jsonpath='{.status.sync.status} {.status.health.status}' 2>/dev/null
 }
 
@@ -91,9 +92,10 @@ wait_for_core_synced_healthy() {
 
   # WHEN + THEN 1: the operator reaches the shared Gateway at the ArgoCD dev host
   # through the k3d loadbalancer port-map. `-k` tolerates the local CA that is
-  # deliberately not in the host trust store (research decision 3). A live UI
-  # status (2xx or 3xx) -- NOT the "Empty reply"/connection failure of the empty
-  # placeholder -- proves the whole request path resolves: host :443 -> k3d
+  # deliberately not in the host trust store -- it stands in for production's
+  # publicly trusted ACME cert, which is out of scope for a local cluster. A
+  # live UI status (2xx or 3xx) -- NOT the "Empty reply"/connection failure of
+  # the empty placeholder -- proves the whole request path resolves: host :443 -> k3d
   # port-map -> node IP (Service externalIPs) -> gateway pods -> the `argocd`
   # HTTPRoute -> argocd-server.
   run curl -k -sS -o /dev/null -w '%{http_code}' --max-time 10 "https://${GW_HOST}/"
@@ -102,10 +104,10 @@ wait_for_core_synced_healthy() {
 
   # THEN 2: TLS is terminated at the Gateway with a certificate ISSUED BY THE
   # LOCAL CA. Uses `openssl s_client | openssl x509 -noout -issuer` rather
-  # than `curl -kv | grep`, per design.md's cleared Q6 resolution: the
-  # operator's system `curl` links LibreSSL, not OpenSSL, making `curl -v`'s
-  # human-readable cert dump a brittle, backend-dependent interface for this
-  # exact assertion (live-confirmed this session). `curl -k` (THEN 1 above)
+  # than `curl -kv | grep` because the operator's system `curl` links
+  # LibreSSL, not OpenSSL, making `curl -v`'s human-readable cert dump a
+  # brittle, backend-dependent interface for this exact assertion
+  # (confirmed against this session's curl build). `curl -k` (THEN 1 above)
   # stays the reachability check; asserting the local CA's CommonName here
   # proves cert-manager's SelfSigned->CA chain issued the Gateway cert (the
   # TLS half of the shared contract), rather than Istio serving its built-in
