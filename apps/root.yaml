@@ -1,13 +1,6 @@
-# Root app-of-apps Application. Name must stay "root" -- tests/gitops.bats
-# asserts wait_for_synced_healthy root. source.path is "apps" (this directory),
-# not this file -- ArgoCD reconciling apps/ re-applies apps/root.yaml (and
-# every layer Application) itself, which is the "manages itself" property.
+# Root app-of-apps Application.
 #
-# repoURL: this repo is public (github.com/DavidSouther/agrippa, renamed from
-# the "aristotle" name the local `origin` SSH remote still carries), so a
-# plain HTTPS clone needs no repo credential Secret at all -- the simplest,
-# lowest-attack-surface choice for a read-only GitOps source. An SSH deploy
-# key would only be needed for a private repo.
+# Name must match tests/gitops.bats assertion `wait_for_synced_healthy root`.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
