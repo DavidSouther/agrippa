@@ -1,8 +1,3 @@
-# Wave -10: substrate CRDs other wave -5 controllers (Istio, cert-manager)
-# watch at startup. Pinned to the Gateway API v1.6.0 standard channel --
-# the release where the last L4 route types (TCPRoute/TLSRoute/UDPRoute)
-# graduated to GA `v1`, matching the `v1` Gateway/HTTPRoute this feature's
-# authored CRs use.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
