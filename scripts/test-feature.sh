@@ -22,17 +22,13 @@ rc=0
 # This throwaway cluster never installs ArgoCD's CRDs -- only `bootstrap`
 # does that, against the long-lived agrippa-dev cluster (tests/gitops.bats
 # covers apps/ end-to-end there) -- so a bare `kubectl apply -k apps` here
-# would just fail with "no matches for kind Application". Skip it; a later
-# feature-step's real component manifests land under its own
-# <layer>/overlays/dev path instead, which is a plain kustomize/manifest
-# directory this loop can apply once that convention has real content.
+# would just fail with "no matches for kind Application".
 if [ -d apps ]; then
   echo "test:feature: apps/ is GitOps-owned (ArgoCD Applications); covered by tests/gitops.bats against the long-lived cluster, skipping here"
 fi
 
-# chainsaw resource-reconcile assertions. Convention (DEVELOPMENT.md repo
-# layout): every tests/<feature>/ directory other than tests/policy (reserved
-# for conftest Rego) is a chainsaw suite.
+# chainsaw resource-reconcile assertions. Convention: every tests/<feature>/
+# directory other than tests/policy (reserved for conftest Rego) is a chainsaw suite.
 chainsaw_dirs=()
 if [ -d tests ]; then
   for d in tests/*/; do
@@ -49,16 +45,7 @@ else
 fi
 
 # Component bats probes. Convention: every tests/<feature>.bats other than the
-# cross-cutting suites already owned by their own tasks/uses (agrippa.bats ->
-# test:gestalt; harness.bats -> this harness's own feature test, run via
-# test:push; preflight.bats -> a standalone machine check, not a probe of the
-# component-under-test's cluster; cluster-core.bats -> the Cluster core feature
-# test, which drives `cluster:up`/`cluster:down` against the long-lived
-# agrippa-dev cluster, not this throwaway feature cluster; gitops.bats -> also
-# drives the long-lived agrippa-dev cluster via `mise run bootstrap`, needs its
-# own runner rather than this throwaway feature cluster; rotate-keys.bats ->
-# a standalone sops/age mechanism check with a stubbed Bitwarden, needs no
-# cluster at all).
+# cross-cutting suites already in mise tasks
 probe_suites=()
 for f in tests/*.bats; do
   [ -e "$f" ] || continue
