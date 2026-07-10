@@ -1,8 +1,6 @@
-# Wave 5: the shared Gateway API Gateway. Creating this object causes
-# istiod's Gateway API controller to auto-provision a Deployment + Service
-# for the gateway data plane in this same namespace (istio-ingress) -- that
-# auto-provisioned Service is not authored here (gateway-external-svc.yaml is
-# a separate, supplemental Service for the k3d externalIPs reachability fix).
+# The shared Gateway API Gateway.
+# This object causes istiod's Gateway API controller to auto-provision a Deployment + Service
+# for the gateway data plane in this same namespace (istio-ingress).
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
