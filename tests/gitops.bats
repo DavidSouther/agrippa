@@ -1,30 +1,15 @@
 #!/usr/bin/env bats
 #
-# Feature test for GitOps (ArgoCD app-of-apps + KSOPS/age), roadmap item 4 /
-# Feature 2 of the local k3d project.
+# Feature test for GitOps (ArgoCD app-of-apps + KSOPS/age)
 #
 # Primary user story (Given / When / Then):
-#   Given the running long-lived `agrippa-dev` k3d cluster (Feature 1), the Step 0
-#         toolchain, and an UNLOCKED Bitwarden session holding the dev age key
-#         item `agrippa-age-dev`,
+#   Given the running long-lived `agrippa-dev` k3d cluster, toolchain, and an
+#         UNLOCKED Bitwarden session holding the dev age key item `agrippa-age-dev`,
 #   When an operator runs `mise run bootstrap`,
 #   Then the `sops-age` trust root exists in the `argocd` namespace, the ArgoCD
-#        repo-server is KSOPS-enabled (mounts `sops-age` and carries the ksops
-#        decrypt init-container so `kustomize build` can decrypt), the root
+#        repo-server is KSOPS-enabled, the root
 #        app-of-apps manages itself and reports Synced/Healthy, and the five-layer
-#        skeleton (core, storage, platform, observability, workloads) is registered
-#        and ready to receive later feature-steps' Applications.
-#
-# This is roadmap item 4 (GitOps) in its k3d-only form: the `mise run bootstrap`
-# task stands in for production's Terraform/cloud-init injection of the `sops-age`
-# Secret and install of ArgoCD (research decisions 4 and 8). The hand-applied
-# surface is the minimum that gets a DECRYPTING ArgoCD running; everything after is
-# ArgoCD-reconciled via sync-waves.
-#
-# EXPECTED TO FAIL until GitOps lands the `bootstrap` mise task, the KSOPS/age
-# wiring, and the `apps/` app-of-apps skeleton. Before that, `mise run bootstrap`
-# errors (`no task bootstrap found`) and this suite fails at its first assertion.
-# That red state defines "done" for this feature-step.
+#        skeleton (core, storage, platform, observability, workloads) is registered.
 #
 # SECRETS BOUNDARY: `bootstrap` reads the dev age key from Bitwarden only
 # (`bw get notes agrippa-age-dev`), never from a committed or plaintext file. If
@@ -55,7 +40,7 @@ setup() {
 
 # Echoes "<sync> <health>" for an ArgoCD Application, e.g. "Synced Healthy".
 app_status() {
-  kubectl --context "$CTX" -n "$NS" get application "$1" \
+  mise x kubectl --context "$CTX" -n "$NS" get application "$1" \
     -o jsonpath='{.status.sync.status} {.status.health.status}' 2>/dev/null
 }
 
@@ -79,30 +64,24 @@ wait_for_synced_healthy() {
   run mise run bootstrap
   [ "$status" -eq 0 ]
 
-  # THEN 1: the sops-age trust root exists in the argocd namespace. This is the
-  # whole in-cluster decryption root, created from Bitwarden's agrippa-age-dev in
-  # place of Terraform's injection (research decision 4).
+  # THEN 1: the sops-age trust root exists in the argocd namespace.
   run kubectl --context "$CTX" -n "$NS" get secret sops-age
   [ "$status" -eq 0 ]
 
-  # THEN 2: the repo-server is KSOPS-enabled -- it mounts the sops-age key and
-  # carries the ksops decrypt init-container, so any layer's sops-encrypted
-  # manifest decrypts transparently at `kustomize build` time (DEVELOPMENT.md
-  # ## Secrets). This proves a DECRYPTING ArgoCD, not merely an ArgoCD.
+  # THEN 2: the repo-server is KSOPS-enabled (it mounts the sops-age key and
+  # carries the ksops decrypt init-container). This proves a DECRYPTING ArgoCD,
+  # not merely an ArgoCD.
   run kubectl --context "$CTX" -n "$NS" get deployment argocd-repo-server -o yaml
   [ "$status" -eq 0 ]
   echo "$output" | grep -qi ksops
   echo "$output" | grep -q sops-age
 
-  # THEN 3: the root app-of-apps manages itself and reports Synced + Healthy. This
-  # is the load-bearing GitOps property (ARCHITECTURE.html: "manages itself") and
-  # Closing Bell criterion 1.
+  # THEN 3: the root app-of-apps manages itself and reports Synced + Healthy.
   run wait_for_synced_healthy root
   [ "$status" -eq 0 ]
 
   # THEN 4: the five-layer app-of-apps skeleton is registered and ready to receive
-  # later feature-steps' Applications (core, storage, platform, observability,
-  # workloads -- README's Cluster Infrastructure table).
+  # later feature-steps' Applications.
   for layer in core storage platform observability workloads; do
     run kubectl --context "$CTX" -n "$NS" get application "$layer"
     [ "$status" -eq 0 ]
