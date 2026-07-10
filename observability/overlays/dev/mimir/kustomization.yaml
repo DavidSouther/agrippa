@@ -26,6 +26,9 @@ helmCharts:
             enabled: false
           ingester:
             push_grpc_method_enabled: true
+            ring:
+              # Chart default (3) exceeds this overlay's single ingester replica.
+              replication_factor: 1
       ingester:
         replicas: 1
         zoneAwareReplication:
