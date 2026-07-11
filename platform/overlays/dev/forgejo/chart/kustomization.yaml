@@ -4,7 +4,8 @@
 #
 # `code.forgejo.org/forgejo-helm/forgejo-helm` 404s -- the correct OCI chart
 # path is `oci://code.forgejo.org/forgejo-helm/forgejo`. Pinned to 17.1.1
-# (appVersion 15.0.3); do not float the tag.
+# (appVersion 15.0.3); the `version:` field below is the actual enforcement,
+# this note is just so the pin isn't mistaken for an oversight.
 #
 # The chart's `templates/tests/` hook renders a literal, permanent test Pod
 # (helm.sh/hook semantics ArgoCD doesn't understand, same as
@@ -16,12 +17,11 @@
 # kubernetes-sigs/kustomize#6058 `patches:` workaround is not needed here.
 #
 # `gitea.additionalConfigFromEnvs` entries are spliced directly into the
-# init container's `env:` list (templates/gitea/deployment.yaml), so each
-# entry must already be a well-formed core/v1 EnvVar object -- `name` +
-# `valueFrom.secretKeyRef`, per the chart's own README example -- not an
-# `envName`/`secretKeyRef` shorthand (a Gitea-chart-ism that does not exist
-# in this schema; ArgoCD's ServerSideApply rejects that shape with "field
-# not declared in schema" on the initContainer's env entry).
+# init container's `env:` list (templates/gitea/deployment.yaml). Each entry
+# must be a well-formed core/v1 EnvVar object: `name` + `valueFrom.secretKeyRef`,
+# per the chart's own README example. Not an `envName`/`secretKeyRef`
+# shorthand -- that's a Gitea-chart-ism that doesn't exist in this schema,
+# and ArgoCD's ServerSideApply rejects it with "field not declared in schema."
 # FORGEJO__DATABASE__PASSWD follows Forgejo's own FORGEJO__<SECTION>__<KEY>
 # convention, not Gitea's legacy GITEA__ prefix.
 #

@@ -2,9 +2,11 @@
 # Plain-HTTP backend -- service.http.type defaults to ClusterIP on port
 # 3000 (chart default), and Forgejo's own server.PROTOCOL defaults to
 # http, so no DestinationRule re-origination is needed (the argocd-style
-# HTTPS-backend case does not apply here). `matches` is authored
-# explicitly; see observability/overlays/dev/grafana-httproute.yaml:4-6 for
-# why an omitted `matches:` is unsafe under ServerSideDiff.
+# HTTPS-backend case does not apply here). `matches` is authored explicitly
+# even though PathPrefix "/" is the Gateway API schema's own default for an
+# omitted rule: ArgoCD's ServerSideDiff mispredicts against that omitted-vs-
+# defaulted structural difference, leaving this permanently OutOfSync if
+# left implicit.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
