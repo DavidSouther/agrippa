@@ -22,8 +22,8 @@
 # NOTE on scope: Flagsmith's own chart has no sealed admin-login credential to
 # assert against (its `api.bootstrap` initContainer only prints a one-time
 # password-reset link to its own pod logs, per the chart's NOTES.txt -- there
-# is no Secret holding it). The sealed credentials this feature-step actually
-# owns are the `flagsmith-db` CNPG role, `flagsmith-database-url`, and
+# is no Secret holding it). The sealed credentials Feature 7 actually owns are
+# the `flagsmith-db` CNPG role, `flagsmith-database-url`, and
 # `flagsmith-secret-key` -- this suite proves those authenticate, in place of
 # an admin-login round-trip.
 #
