@@ -3,19 +3,15 @@
 # live in this sub-kustomization; the four CRDs and the Namespace itself are
 # cluster-scoped, so the namespace transformer skips them.
 #
-# BUILD-TIME CORRECTION (this feature-step, live-verified): design.md/plan.md
-# researched against the 26.6.x line, which shipped only two CRDs (Keycloak,
-# KeycloakRealmImport). By build time the pinned upstream had advanced to
-# 26.7.0, which ships two more (KeycloakOIDCClient, KeycloakSAMLClient) --
-# and 26.7.0's operator Deployment unconditionally registers JOSDK
-# controllers/informers for all four kinds
+# All four CRDs (Keycloak, KeycloakRealmImport, KeycloakOIDCClient,
+# KeycloakSAMLClient) must install together even though this feature only
+# authors Keycloak/KeycloakRealmImport CRs: 26.7.0's operator Deployment
+# unconditionally registers JOSDK controllers/informers for all four kinds
 # (QUARKUS_OPERATOR_SDK_CONTROLLERS_*_NAMESPACES=JOSDK_WATCH_CURRENT for all
-# four in kubernetes.yml's Deployment env). Installing only two CRDs left the
+# four in kubernetes.yml's Deployment env), so installing only two leaves the
 # operator pod CrashLoopBackOff on startup: "Couldn't start informer for
 # keycloaksamlclients.k8s.keycloak.org/v2alpha1 resources ... GET
-# .../keycloaksamlclients?resourceVersion=0. Message: Not Found." All four
-# CRDs must be installed together even though this feature only authors
-# Keycloak/KeycloakRealmImport CRs.
+# .../keycloaksamlclients?resourceVersion=0. Message: Not Found."
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: keycloak
@@ -23,9 +19,7 @@ commonAnnotations:
   argocd.argoproj.io/sync-wave: "-10"
 resources:
   - namespace.yaml
-  # Keycloak Operator 26.7.0 (research:public, keycloak/keycloak-k8s-resources
-  # tag list -- current stable at build time; the design's 26.6.x line has
-  # since advanced). Pinned explicitly; do not float the tag.
+  # Keycloak Operator 26.7.0, pinned explicitly; do not float the tag.
   - https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.7.0/kubernetes/keycloaks.k8s.keycloak.org-v1.yml
   - https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.7.0/kubernetes/keycloakrealmimports.k8s.keycloak.org-v1.yml
   - https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/26.7.0/kubernetes/keycloakoidcclients.k8s.keycloak.org-v1.yml

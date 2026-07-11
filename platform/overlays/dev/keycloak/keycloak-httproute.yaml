@@ -16,8 +16,9 @@ spec:
   hostnames:
     - auth.127.0.0.1.nip.io
   rules:
-    # `matches` authored explicitly -- see argocd-httproute.yaml's identical note
-    # on ArgoCD's pre-sync diff not replicating this nested-array structural default.
+    # `matches` authored explicitly -- see grafana-httproute.yaml's identical
+    # note on ArgoCD's pre-sync diff not replicating this nested-array
+    # structural default.
     - matches:
         - path:
             type: PathPrefix

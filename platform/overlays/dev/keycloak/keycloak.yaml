@@ -1,7 +1,6 @@
 # Wave 0: the Keycloak CR, wired to the shared postgres Cluster over its
-# plain-HTTP listener. The keycloak database (wave -5, Step 2) already
-# exists by the time this CR reconciles -- see design.md's "Correction by
-# the long-loop reviewer (2026-07-09)".
+# plain-HTTP listener. Runs at wave 0, after the wave -5 keycloak-database.yaml
+# Database CR -- the database must already exist when this CR's pod connects.
 apiVersion: k8s.keycloak.org/v2beta1
 kind: Keycloak
 metadata:
@@ -11,13 +10,12 @@ metadata:
     argocd.argoproj.io/sync-wave: "0"
 spec:
   instances: 1
-  # BUILD-TIME FINDING (live-verified): the Operator's own default request
-  # (1700Mi memory) could not schedule on the single-node k3d-agrippa-dev
-  # cluster -- its 16Gi allocatable is ~99% requested by everything else
-  # already live (istiod alone requests 2Gi; the concurrently-building
-  # Observability layer's Loki chunks-cache alone requests ~9.8Gi). Scoped
-  # down to a dev-appropriate footprint, matching this CR's other dev
-  # sizing (spec.instances: 1, a single minimal proof realm).
+  # The Operator's own default request (1700Mi memory) doesn't schedule on
+  # the single-node k3d-agrippa-dev cluster -- its 16Gi allocatable is
+  # ~99% requested by everything else already live (istiod alone requests
+  # 2Gi; Loki's chunks-cache alone requests ~9.8Gi). Scoped down to match
+  # this CR's other dev sizing (spec.instances: 1, a single minimal proof
+  # realm).
   resources:
     requests:
       memory: 512Mi
