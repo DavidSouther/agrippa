@@ -9,3 +9,6 @@ storage/overlays/dev/*/charts/
 observability/overlays/dev/*/charts/
 platform/overlays/dev/*/charts/
 platform/overlays/dev/*/*/charts/
+
+# jsonnet-bundler restores this from jsonnetfile.lock.json via `mise run dashboards:build`.
+observability/overlays/dev/grafana/dashboards/*/vendor/
