@@ -6,4 +6,5 @@ resources:
   - storage.yaml
   - platform.yaml
   - observability.yaml
-  - workloads.yaml
+  - workloads-resume.yaml
+  - workloads-trips.yaml

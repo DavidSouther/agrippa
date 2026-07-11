@@ -1,9 +1,8 @@
-# Workloads serves davidsouther.com, trips.davidsouther.com; and eventually
-# ailly.dev, /agathon, /blog, and DavidBot
+# Resume serves davidsouther.com and /blog
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: workloads
+  name: workloads-resume
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "4"
@@ -14,7 +13,7 @@ spec:
   source:
     repoURL: https://github.com/DavidSouther/agrippa.git
     targetRevision: main
-    path: workloads/overlays/dev
+    path: workloads/overlays/dev/resume
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

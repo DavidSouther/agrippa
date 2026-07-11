@@ -5,23 +5,23 @@
 # (github.com/davidsouther/resume serving davidsouther.com + /blog, and
 # github.com/davidsouther/trips serving trips.davidsouther.com) in-cluster,
 # built from git submodules into local images by `mise run workloads:build`
-# and reconciled by ArgoCD as plain kustomize `resources:` YAML under the
-# `workloads` layer.
+# and reconciled by ArgoCD as two independent Applications (workloads-resume,
+# workloads-trips) so each site versions and deploys on its own.
 #
 # Primary user story (Given / When / Then):
 #   Given the bootstrapped long-lived `agrippa-dev` cluster with this Workloads
 #         content committed, the resume:dev/trips:dev images built and
 #         `k3d image import`-ed by `mise run workloads:build`, and ArgoCD
-#         reconciling both overlays into the `workloads` layer (a Deployment,
-#         Service, and HTTPRoute on the shared Istio Gateway per workload),
+#         independently reconciling each overlay (a Deployment, Service, and
+#         HTTPRoute on the shared Istio Gateway per workload),
 #   When an operator reaches each site through the shared Gateway at its dev
 #        host,
-#   Then the `workloads` Application is Synced/Healthy, the personal site
-#        serves 200 with real rendered content at `/` and at `/blog`, its
-#        `/healthz` returns exactly 200, and the trips site serves 200 with
-#        real rendered content at `/` -- proving both of David's real sites
-#        run in-cluster and are reachable end-to-end through the Gateway over
-#        the local-CA cert.
+#   Then both the workloads-resume and workloads-trips Applications are
+#        Synced/Healthy, the personal site serves 200 with real rendered
+#        content at `/` and at `/blog`, its `/healthz` returns exactly 200,
+#        and the trips site serves 200 with real rendered content at `/` --
+#        proving both of David's real sites run in-cluster and are reachable
+#        end-to-end through the Gateway over the local-CA cert.
 #
 # NOTE: this suite deliberately does NOT tear the cluster or the workloads
 # down. Both are long-lived and GitOps-managed; this suite only reads, so
@@ -31,8 +31,8 @@
 #
 # Requires: bats-core, mise, curl, kubectl, and (for green) the running
 # bootstrapped `agrippa-dev` cluster with the resume/trips images built +
-# imported by `mise run workloads:build` and the `workloads` content
-# reconciled by ArgoCD.
+# imported by `mise run workloads:build` and both workloads-resume/
+# workloads-trips Applications reconciled by ArgoCD.
 #
 # PUBLIC_HOST / TRIPS_HOST override the target hosts, mirroring the gestalt
 # suite's own override names (tests/agrippa.bats).
@@ -49,7 +49,7 @@ setup() {
   mise trust >/dev/null 2>&1 || true
 }
 
-# Echoes "<sync> <health>" for the `workloads` ArgoCD Application.
+# Echoes "<sync> <health>" for an ArgoCD Application.
 app_status() {
   mise x kubectl -- kubectl --context "$CTX" -n "$NS" get application "$1" \
     -o jsonpath='{.status.sync.status} {.status.health.status}' 2>/dev/null
@@ -67,8 +67,10 @@ wait_for_synced_healthy() {
 }
 
 @test "resume and trips render through the Gateway over local-CA TLS, with the personal site's /healthz live" {
-  # THEN 0: ArgoCD has reconciled Workloads into the workloads layer.
-  run wait_for_synced_healthy workloads
+  # THEN 0: ArgoCD has independently reconciled each workload.
+  run wait_for_synced_healthy workloads-resume
+  [ "$status" -eq 0 ]
+  run wait_for_synced_healthy workloads-trips
   [ "$status" -eq 0 ]
 
   # THEN 1: the personal site is reachable through the shared Gateway at its

@@ -1,0 +1,27 @@
+# Trips serves trips.davidsouther.com
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: workloads-trips
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+    # See apps/core.yaml:9-14
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DavidSouther/agrippa.git
+    targetRevision: main
+    path: workloads/overlays/dev/trips
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    # See apps/core.yaml:29-35 for syncOptions reasoning
+    syncOptions:
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true
