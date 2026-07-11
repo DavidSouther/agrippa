@@ -250,8 +250,7 @@ that something needs a second pass.
 
 This section is forward-looking. Nothing here exists in the cluster today;
 it's this runbook's own deferred-work note, so the intent isn't lost by the
-time someone picks it up: review CloudNativePG for application-consistent
-Postgres backup and point-in-time recovery.
+time someone picks it up.
 
 CloudNativePG has its own native backup and point-in-time-recovery support:
 WAL archiving to object storage, plus `Backup` and `ScheduledBackup` CRDs

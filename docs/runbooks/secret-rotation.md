@@ -185,45 +185,25 @@ already trusted.
 
 ---
 
-## 5. Known bug: the rotation test suite is red right now
+## 5. Fixed: the rotation script's stage ordering
 
-`tests/rotate-keys.bats` currently fails, and it is not flaky or
-environmental -- it's a real, already-diagnosed defect in the stage order of
-`scripts/rotate-keys.sh` itself.
+Earlier revisions of `scripts/rotate-keys.sh` ran Stage 4 (re-encrypting
+already-committed secrets via `sops updatekeys`) **before** Stage 5 (updating
+`.sops.yaml`'s recipient). `sops updatekeys` re-wraps a file's data key for
+whatever recipients `.sops.yaml`'s matching rule currently lists -- so
+running re-encryption first meant it re-wrapped against the old,
+about-to-be-archived recipient, a no-op from `sops`'s own point of view.
+`.sops.yaml` would then flip to the new recipient afterward, leaving it
+declaring a recipient that no committed file was actually encrypted to.
 
-**The defect:** Stage 4 (re-encrypting already-committed secrets via `sops
-updatekeys`) runs **before** Stage 5 (updating `.sops.yaml`'s recipient).
-`sops updatekeys` re-wraps a file's data key for whatever recipients
-`.sops.yaml`'s matching rule currently lists -- but at the point Stage 4
-runs, `.sops.yaml` still lists the *old* recipient, since Stage 5 hasn't
-executed yet. So the re-encryption pass is a no-op from `sops`'s own point
-of view: the file stays encrypted only to the old (about-to-be-archived)
-key. Only afterward does Stage 5 flip `.sops.yaml` over to the new
-recipient. The net result: `.sops.yaml` now declares a recipient that no
-committed file is actually encrypted to, and the file itself is stranded on
-a key `.sops.yaml` no longer names as current. The bats test's own final
-assertion (`tests/rotate-keys.bats` around the `SOPS_AGE_KEY="$new_notes"
-sops -d` check) catches exactly this: the already-committed fixture secret
-fails to decrypt under the freshly-minted key after a full rotation run.
+**This is fixed.** `scripts/rotate-keys.sh` now updates `.sops.yaml`'s
+recipient (the `## Reflect the new recipient in .sops.yaml` block) before
+re-encrypting any already-committed secret (the `## Re-encrypt
+already-committed secrets under the new recipient` block), so the
+re-encryption pass always targets the current recipient. `tests/
+rotate-keys.bats` passes end to end, including the final
+decrypt-under-the-new-key assertion that used to catch this defect.
 
-**Fix:** reorder the script so Stage 5 (`.sops.yaml` update) runs before
-Stage 4 (`sops updatekeys` re-encryption pass), so the re-encryption target
-is the new recipient, not the stale one. Not yet done as of this writing.
-
-**What this means for you today:** this bug does not affect any secret or
-Application currently running in `agrippa-dev` -- it was caught and
-reproduced against disposable fixtures (`agrippa-age-citest`, a throwaway
-`secrets/citest/` directory), never against the real `agrippa-age-dev` trust
-root. But it does mean the **live `agrippa-age-dev` rotation path is
-currently unverified by its own test suite**. Until the stage-order bug
-above is fixed:
-
-- Treat `mise run rotate-keys` against `agrippa-dev` with extra caution.
-- If you're genuinely nervous about a real rotation right now, dry-run the
-  same script against a throwaway Bitwarden item and a scratch
-  `secrets/<test-env>/` fixture first (the way `tests/rotate-keys.bats`
-  itself does) before pointing it at `agrippa-age-dev` for real.
-- After a real rotation, do not skip the "Verifying it worked" checks in
-  section 3 -- they are your actual evidence the run succeeded, not the
-  script's own exit code alone, since this defect lets the script report
-  success while leaving a file mis-encrypted.
+Key rotation works correctly. No extra caution or dry run is needed beyond
+the normal "Verifying it worked" checks in section 3, which remain the right
+place to confirm any given rotation actually took.

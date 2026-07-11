@@ -131,8 +131,8 @@ workload decoupled from Flagsmith specifically.
 both fully static sites (jiffies-built, served by nginx) with no runtime
 code to wire an SDK into. This is a real, deliberate seam: wiring an actual
 workload to an OpenFeature provider was scoped out of this project on
-purpose, left for a later feature-step, only where a workload actually
-reads a flag -- not a bug, not partially built, just not exercised
+purpose, left for a later feature-step that wires a workload only where it
+actually reads a flag -- not a bug, not partially built, just not exercised
 end-to-end anywhere in this repo yet.
 
 ## 2. The API path (for scripting)

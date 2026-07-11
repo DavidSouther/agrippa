@@ -51,6 +51,12 @@ watch for the fix to land in.
 
 ### Revert it
 
+Start a feature branch for the revert, same as any other change:
+
+```bash
+git checkout -b revert/<short-description>
+```
+
 A single bad commit:
 
 ```bash
@@ -64,11 +70,10 @@ git revert <old>..<new>
 ```
 
 `git revert` creates a **new** commit that undoes the change, rather than
-rewriting history. That matches this repo's git-safety posture from
-`DEVELOPMENT.md`: commits go straight to `origin/main`, there are no
-feature branches or PRs here, and history is never force-pushed or rewritten
-once it's public. `git reset` or a force-push would violate that -- don't use
-them for this.
+rewriting history. That matches this repo's git-safety posture: a revert
+lands through a feature branch and a reviewed pull request like any other
+change, and history is never force-pushed or rewritten once it's public.
+`git reset` or a force-push would violate that -- don't use them for this.
 
 If `git revert` produces a merge conflict (rare on a linear `main`, but
 possible if later commits touched the same lines), resolve it by hand, then
@@ -77,8 +82,11 @@ possible if later commits touched the same lines), resolve it by hand, then
 ### Push it
 
 ```bash
-git push origin main
+git push -u origin revert/<short-description>
+gh pr create --base main --fill
 ```
+
+Merge the reviewed pull request into `main` before moving to the next step.
 
 ### Confirm ArgoCD picked it up
 
@@ -110,13 +118,13 @@ kubectl -n argocd get application <layer> \
 
 Commit `463a33f` (`fix(otel): set Mimir's ingester ring replication_factor to
 1`) fixed a live Mimir misconfiguration by editing
-`observability/overlays/dev/mimir/kustomization.yaml` and pushing straight to
-`main`. That wasn't a rollback -- it was a forward fix -- but it's the exact
-same delivery mechanism a rollback commit uses: edit (or revert), commit,
-push, let ArgoCD reconcile. If a revert isn't clean (the bad change is
-tangled up with later, wanted changes), a hand-written forward-fix commit
-that restores the old behavior is an equally valid use of this same
-mechanism.
+`observability/overlays/dev/mimir/kustomization.yaml`. That wasn't a
+rollback -- it was a forward fix -- but it's the exact same delivery
+mechanism a rollback commit uses: edit (or revert), commit, push a feature
+branch, open a pull request, get it reviewed and merged into `main`, then
+let ArgoCD reconcile. If a revert isn't clean (the bad change is tangled up
+with later, wanted changes), a hand-written forward-fix commit that
+restores the old behavior is an equally valid use of this same mechanism.
 
 ---
 
