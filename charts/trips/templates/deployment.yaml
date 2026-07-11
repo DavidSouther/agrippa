@@ -1,5 +1,3 @@
-# No /healthz here -- only the resume chart's image serves one; probes
-# target plain /.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

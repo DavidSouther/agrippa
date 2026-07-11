@@ -1,33 +1,20 @@
 # syntax=docker/dockerfile:1
-# Builds trips.davidsouther.com (the `trips` workload) from the
-# `workloads/trips` git submodule (github.com/davidsouther/trips, private, an
-# @davidsouther/jiffies static-site generator). Built outside the submodule
-# directory (context is `workloads/trips`, passed via `-f` from the repo root
-# by scripts/workloads-build.sh) since the submodule tracks the real upstream
-# repo verbatim -- no Dockerfile lives inside it.
+# Context is workloads/trips (passed via -f by scripts/workloads-build.sh) -- the submodule tracks upstream verbatim and has no Dockerfile of its own.
 #
-# Stage 1: node:24 (glibc, NOT node:24-alpine) -- same rationale as
-# resume.Dockerfile: lightningcss-cli and @biomejs/biome ship musl-native
-# optional binaries that are not reliable under Alpine/musl in a fresh
-# container.
+# glibc, not alpine -- lightningcss-cli/biome's musl-native optional binaries don't install reliably under Alpine in a fresh, no-cache build.
 FROM node:24 AS build
 WORKDIR /src
 COPY . .
-# npm ci installs from the committed lockfile (trips is confirmed
-# offline-buildable -- its trip data is a committed cache, no network fetch
-# beyond npm ci itself); npm run build's own `prebuild` lifecycle hook (npm
-# run check: tsc --noEmit + biome check) runs first, then css:bundle + the
-# sitemap script + the jiffies SSG write the static site into docs/.
+# trips is offline-buildable -- its trip data is a committed cache, no
+# network fetch beyond npm ci itself. npm run build writes the static site
+# into docs/.
 RUN npm ci && npm run build
 
-# Stage 2: a minimal static server. No /healthz here -- only the personal
-# (resume) site carries one; trips' own liveness/readiness probe targets
-# plain `/`.
+# Stage 2: a minimal static server. No /healthz block -- unlike resume's
+# image, this one doesn't serve one.
 #
-# `absolute_redirect off` matches resume.Dockerfile's own build-time finding:
-# TLS terminates upstream at the shared Istio Gateway and this container's
-# HTTPRoute binds only the `https` listener, so any directory-index redirect
-# nginx emits must be scheme/host-less (relative) or it 404s at the Gateway.
+# absolute_redirect off -- same reason as resume.Dockerfile: TLS terminates
+# at the Gateway, this container only speaks HTTP.
 FROM nginx:alpine
 COPY --from=build /src/docs /usr/share/nginx/html
 RUN <<'EOF' cat > /etc/nginx/conf.d/default.conf

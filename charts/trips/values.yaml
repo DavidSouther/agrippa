@@ -1,7 +1,4 @@
-# Packaging chart for the trips workload -- kept aligned with
-# workloads/overlays/dev/trips/*.yaml (the live GitOps render path) by
-# discipline, not generated from it. Defaults here mirror that live overlay's
-# hand-authored values exactly.
+# Hand-kept in sync with workloads/overlays/dev/trips/*.yaml -- not generated from it.
 image:
   repository: trips
   tag: dev

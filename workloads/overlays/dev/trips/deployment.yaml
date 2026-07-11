@@ -1,7 +1,4 @@
-# imagePullPolicy: Never schedules only against an image already present on
-# the node -- `mise run workloads:build` must be (re-)run against this exact
-# cluster before this syncs, or the pod sits in ErrImageNeverPull. No
-# /healthz in this image (unlike resume's); probes target plain /.
+# imagePullPolicy: Never -- run 'mise run workloads:build' against this cluster first, or this sits in ErrImageNeverPull.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

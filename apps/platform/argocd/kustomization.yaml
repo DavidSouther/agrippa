@@ -80,15 +80,10 @@ patches:
         name: argocd-cm
       data:
         kustomize.buildOptions: "--enable-alpha-plugins --enable-exec --enable-helm"
-  # `.gitmodules` references the private `davidsouther/trips` repo; the shared
-  # `agrippa` repoURL carries no repository-credential Secret, so the
-  # repo-server's default recursive submodule fetch 401s there, breaking
-  # manifest generation for every Application on this repoURL. No
-  # per-Application disable exists (argoproj/argo-cd#3799), so this global
-  # toggle is the only lever. Safe: nothing rendered here needs submodule
-  # content from the repo-server itself -- `mise run workloads:build` does
-  # its own authenticated fetch on the operator's machine before building the
-  # image, and ArgoCD only ever applies the resulting plain-YAML manifests.
+  # trips is a private submodule; the shared repoURL carries no credential
+  # Secret, so the repo-server's fetch 401s here for every Application on it.
+  # No per-Application override exists (argoproj/argo-cd#3799), so this has
+  # to be global.
   - target:
       kind: ConfigMap
       name: argocd-cmd-params-cm

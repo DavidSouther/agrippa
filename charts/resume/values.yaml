@@ -1,7 +1,4 @@
-# Packaging chart for the resume workload -- kept aligned with
-# workloads/overlays/dev/resume/*.yaml (the live GitOps render path) by
-# discipline, not generated from it. Defaults here mirror that live overlay's
-# hand-authored values exactly.
+# Hand-kept in sync with workloads/overlays/dev/resume/*.yaml -- not generated from it.
 image:
   repository: resume
   tag: dev
@@ -18,8 +15,6 @@ resources:
 
 hostname: davidsouther.com.127.0.0.1.nip.io
 
-# Toggles the Deployment's probes between /healthz and / -- only the
-# personal site's image serves /healthz.
 healthz: true
 
 service:
