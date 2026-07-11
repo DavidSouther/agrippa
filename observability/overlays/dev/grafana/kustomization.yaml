@@ -32,16 +32,8 @@ helmCharts:
               type: loki
               access: proxy
               url: http://loki.observability.svc:3100
-              # Pinned to the uid Grafana already auto-derived and persisted
-              # to its SQLite PVC on first provision (read live via
-              # `GET /api/datasources`, not re-derived) -- Grafana does not
-              # support reassigning a previously-provisioned datasource's
-              # uid against existing PVC state (confirmed live: doing so
-              # once put the datasource-provisioning module into a
-              # permanent Failed state, crash-looping the pod). Pinning to
-              # the existing value keeps this declaration a no-op against
-              # live state while still giving the dashboard JSON below a
-              # stable, explicit uid to reference.
+              # Reassigning a provisioned datasource's uid crashloops the
+              # provisioning module -- pinned to the existing value.
               uid: P8E80F9AEF21F6940
             - name: Mimir
               type: prometheus
@@ -65,20 +57,9 @@ helmCharts:
               editable: true
               options:
                 path: /var/lib/grafana/dashboards/default
-      # Provisioned via the chart's own sidecar-free `dashboards:` path (the
-      # same mechanism as `datasources:` above -- confirmed live in the
-      # chart's own templates, no `sidecar.dashboards.enabled` needed): one
-      # ConfigMap per provider, one key per dashboard, mounted at
-      # /var/lib/grafana/dashboards/<provider>/<key>.json to match
-      # dashboardProviders' `options.path` above. Inlined via `json:` rather
-      # than `file:`: kustomize's helmCharts: inflation runs `helm template`
-      # against a freshly re-fetched, gitignored copy of the chart under
-      # this directory's own charts/ cache, so a `file:` reference (Helm's
-      # `.Files.Get`, resolved relative to the chart root) can't reliably
-      # reach a file that lives outside that cache -- confirmed by reading
-      # the chart's own templates, not assumed. `json:` sidesteps this
-      # entirely (confirmed working via a live `kustomize build --enable-helm`
-      # render).
+      # kustomize's helmCharts inflation re-fetches the chart into its own
+      # gitignored cache, where a file: reference can't reliably resolve --
+      # inlined via json: instead.
       dashboards:
         default:
           web-analytics:
