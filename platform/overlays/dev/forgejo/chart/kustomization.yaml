@@ -1,0 +1,45 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "0"
+helmCharts:
+  - name: forgejo
+    # Not .../forgejo-helm/forgejo-helm -- that 404s.
+    repo: oci://code.forgejo.org/forgejo-helm
+    version: 17.1.1
+    releaseName: forgejo
+    namespace: forgejo
+    # Skips the chart's test-hook Pod, which kustomize renders as a literal
+    # permanent Pod (ArgoCD doesn't run Helm hooks).
+    skipTests: true
+    valuesInline:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          memory: 512Mi
+      gitea:
+        config:
+          database:
+            DB_TYPE: postgres
+            HOST: postgres-rw.storage.svc:5432
+            NAME: forgejo
+            USER: forgejo
+        # Must be well-formed core/v1 EnvVar objects (name +
+        # valueFrom.secretKeyRef); a wrong shape builds fine locally but
+        # ArgoCD's ServerSideApply rejects it at sync time.
+        additionalConfigFromEnvs:
+          - name: FORGEJO__DATABASE__PASSWD
+            valueFrom:
+              secretKeyRef:
+                name: forgejo-db
+                key: password
+        admin:
+          existingSecret: forgejo-admin
+          email: admin@git.davidsouther.com.127.0.0.1.nip.io
+          passwordMode: keepUpdated
+      persistence:
+        enabled: true
+        storageClass: local-path
+        size: 2Gi
