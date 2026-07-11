@@ -85,7 +85,7 @@ timeout traces back to one of the next two symptoms instead:
 
    ```bash
    kubectl -n istio-ingress get gateway,httproute
-   kubectl -n istio-ingress logs deploy/istiod
+   kubectl -n istio-system logs deploy/istiod
    ```
 
 ### Fix
@@ -119,7 +119,7 @@ kubectl -n argocd get application <name> -o jsonpath='{.status.operationState.me
 ```
 
 `<name>` is one of `root`, `core`, `storage`, `platform`, `observability`,
-`workloads`, or `argocd`.
+`workloads-resume`, `workloads-trips`, or `argocd`.
 
 Before assuming it's actually broken versus just stale, force a hard
 refresh and re-check:
@@ -153,11 +153,17 @@ kubectl -n argocd get application <name> -o jsonpath='{.status.sync.status} {.st
    case here) needs *both* set together on the ArgoCD `Application`, or the
    diff engine and the apply engine disagree about what "in sync" means and
    the Application flaps or sticks `OutOfSync` forever. This is
-   argoproj/argo-cd#22151. Check the `Application` manifest under `apps/`:
+   argoproj/argo-cd#22151. Check the `Application` manifest under `apps/`.
+   For the five single-file layers (`root`, `core`, `storage`, `platform`,
+   `observability`) that's `apps/<layer>.yaml`:
 
    ```bash
    grep -A2 'compare-options\|ServerSideApply' apps/<layer>.yaml
    ```
+
+   The `workloads` and `argocd` layers live elsewhere: `apps/workloads/resume.yaml`
+   and `apps/workloads/trips.yaml` for the two workloads, and
+   `platform/overlays/dev/argocd.yaml` for ArgoCD itself.
 
    Both `argocd.argoproj.io/compare-options: ServerSideDiff=true` (an
    annotation) and `syncOptions: [ServerSideApply=true]` (a spec field) must
@@ -325,7 +331,7 @@ If capacity genuinely isn't the issue (the node has headroom and the pod
 still won't schedule), it's more likely a scheduling constraint
 (`nodeSelector`, taint/toleration, PVC binding). That's outside this
 runbook's scope -- treat it as an unknown-cause incident per
-[§5](#5-when-to-give-up-on-incremental-fixes-and-do-something-bigger) below.
+[§7](#7-when-to-give-up-on-incremental-fixes-and-do-something-bigger) below.
 
 ---
 

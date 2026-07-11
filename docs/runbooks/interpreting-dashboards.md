@@ -30,14 +30,15 @@ kubectl -n argocd get applications \
 A healthy platform reads, verified live against this cluster:
 
 ```
-NAME            SYNC     HEALTH
-argocd          Synced   Healthy
-core            Synced   Healthy
-observability   Synced   Healthy
-platform        Synced   Healthy
-root            Synced   Healthy
-storage         Synced   Healthy
-workloads       Synced   Healthy
+NAME               SYNC     HEALTH
+argocd             Synced   Healthy
+core               Synced   Healthy
+observability      Synced   Healthy
+platform           Synced   Healthy
+root               Synced   Healthy
+storage            Synced   Healthy
+workloads-resume   Synced   Healthy
+workloads-trips    Synced   Healthy
 ```
 
 Every row should say `Synced` / `Healthy`. Anything else, read as:
@@ -91,7 +92,7 @@ Four `stat` panels reducing the current window to one number each.
   refresh cycle (not a single 30-second blip, a sustained reading); p95
   Latency climbing over several minutes instead of sitting flat.
 - **Next step**: if only Error Rate moved, jump to "Error Rate by
-  Destination" below to find which service, then Explore → Loki (§ 3)
+  Destination" below to find which service, then Explore → Loki (§ 4)
   filtered to that namespace. If p95 Latency moved while Error Rate stayed
   at 0%, check "Latency Percentiles" below to see whether it's one
   destination or everything at once; everything-at-once means
@@ -112,7 +113,7 @@ Per-destination `rate()` over 5-minute windows, one colored band per
   at nontrivial volume you didn't generate is also worth a look (an
   unexpected client, or a route now sending traffic somewhere it shouldn't).
 - **Next step**: `kubectl -n <ns> get pods,httproute` for the missing
-  service's namespace; then Explore → Loki (§ 3) scoped to that namespace
+  service's namespace; then Explore → Loki (§ 4) scoped to that namespace
   for what the pod itself is logging around the time it went quiet.
 
 ### Requests by Status Code (stacked timeseries)
@@ -121,12 +122,12 @@ Same shape, split by `response_code` instead of destination.
 
 - **Healthy**: dominated by `200`, plus routine `304`s and the occasional
   benign `404` (see the Alloy-scraping-a-nonexistent-`/metrics`-path
-  example under § 3, which is a real 404 on this cluster right now and
+  example under § 4, which is a real 404 on this cluster right now and
   not a problem).
 - **Anomaly**: a `5xx` band appears and holds, or `4xx` volume jumps well
   above its usual trickle (could be a broken client, a bad redirect, or a
   route misconfiguration after a manifest change).
-- **Next step**: Explore → Loki (§ 3) with a status-code text filter
+- **Next step**: Explore → Loki (§ 4) with a status-code text filter
   against the specific namespace to read the actual failing request.
 
 ### Top Destinations (bargauge, by request count)
@@ -175,7 +176,7 @@ Same shape as the headline Error Rate stat, but broken out per
   coinciding with something you just deployed (a rolling restart briefly
   5xx-ing before the new pod is ready) is expected and self-resolves in
   under a minute; anything longer is real.
-- **Next step**: Explore → Loki (§ 3) filtered to that destination's
+- **Next step**: Explore → Loki (§ 4) filtered to that destination's
   namespace, or straight to `kubectl -n <ns> logs deploy/<name> --previous`
   if the pod's also restarting.
 
@@ -203,7 +204,7 @@ range.
   "what": an unfamiliar `source_workload` generating volume, or a
   source/destination pair sitting at a non-`200` status repeatedly.
 - **Next step**: once you have the specific namespace and workload from
-  this table, go straight to Explore → Loki (§ 3) scoped to it.
+  this table, go straight to Explore → Loki (§ 4) scoped to it.
 
 ## 3. When a panel is empty: rule out a broken pipeline first
 
