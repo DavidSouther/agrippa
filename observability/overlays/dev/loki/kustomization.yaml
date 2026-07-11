@@ -1,0 +1,40 @@
+# Loki (Monolithic mode)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "0"
+helmCharts:
+  - name: loki
+    repo: https://grafana-community.github.io/helm-charts
+    version: 18.4.2
+    releaseName: loki
+    namespace: observability
+    valuesInline:
+      deploymentMode: Monolithic
+      singleBinary:
+        replicas: 1
+        persistence:
+          storageClass: local-path
+      write:
+        replicas: 0
+      read:
+        replicas: 0
+      backend:
+        replicas: 0
+      loki:
+        # disabled for this single-tenant local dev deployment so Grafana's
+        # and Alloy's writes need no X-Scope-OrgID tenant header.
+        auth_enabled: false
+        commonConfig:
+          replication_factor: 1
+        storage:
+          type: filesystem
+        useTestSchema: true
+      # Grafana and Alloy go straight to loki:3100
+      gateway:
+        enabled: false
+      # chunks and results cache are for performance, and together would take ~11Gi
+      chunksCache:
+        enabled: false
+      resultsCache:
+        enabled: false

@@ -1,0 +1,42 @@
+# Grafana on SQLite + local-path PVC with explicit admin/admin dev credential
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "5"
+helmCharts:
+  - name: grafana
+    repo: https://grafana-community.github.io/helm-charts
+    version: 12.7.2
+    releaseName: grafana
+    namespace: observability
+    valuesInline:
+      # Dev only!
+      adminUser: admin
+      adminPassword: admin
+      service:
+        # Coordinate with Grafana HTTPRoute
+        port: 3000
+      persistence:
+        enabled: true
+        type: pvc
+        storageClassName: local-path
+      deploymentStrategy:
+        # default is RollingUpdate. On a single-node cluster two Grafana pods
+        # would briefly mount the same ReadWriteOnce PVC
+        type: Recreate
+      datasources:
+        datasources.yaml:
+          apiVersion: 1
+          datasources:
+            - name: Loki
+              type: loki
+              access: proxy
+              url: http://loki.observability.svc:3100
+            - name: Mimir
+              type: prometheus
+              access: proxy
+              url: http://mimir-gateway.observability.svc/prometheus
+            - name: Tempo
+              type: tempo
+              access: proxy
+              url: http://tempo.observability.svc:3200

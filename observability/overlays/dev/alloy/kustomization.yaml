@@ -1,0 +1,64 @@
+# Alloy DaemonSet forwarding metrics to Mimir, logs to Loki, and traces to Tempo
+#
+# three independent pipelines:
+#   - metrics: discovery.kubernetes (role=pod) -> prometheus.scrape -> prometheus.remote_write
+#   - logs: discovery.kubernetes (role=pod) -> loki.source.kubernetes -> loki.write
+#   - traces: otelcol.receiver.otlp (grpc+http) -> otelcol.exporter.otlp -> Tempo's OTLP gRPC ingest port (4317)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "5"
+helmCharts:
+  - name: alloy
+    repo: https://grafana.github.io/helm-charts
+    version: 1.10.0
+    releaseName: alloy
+    namespace: observability
+    valuesInline:
+      alloy:
+        configMap:
+          content: |
+            discovery.kubernetes "pods" {
+              role = "pod"
+            }
+
+            prometheus.scrape "cluster" {
+              targets    = discovery.kubernetes.pods.targets
+              forward_to = [prometheus.remote_write.mimir.receiver]
+            }
+
+            prometheus.remote_write "mimir" {
+              endpoint {
+                url = "http://mimir-gateway.observability.svc/api/v1/push"
+              }
+            }
+
+            loki.source.kubernetes "pods" {
+              targets    = discovery.kubernetes.pods.targets
+              forward_to = [loki.write.loki.receiver]
+            }
+
+            loki.write "loki" {
+              endpoint {
+                url = "http://loki.observability.svc:3100/loki/api/v1/push"
+              }
+            }
+
+            otelcol.receiver.otlp "default" {
+              grpc {}
+              http {}
+
+              output {
+                traces = [otelcol.exporter.otlp.tempo.input]
+              }
+            }
+
+            otelcol.exporter.otlp "tempo" {
+              client {
+                endpoint = "tempo.observability.svc:4317"
+
+                tls {
+                  insecure = true
+                }
+              }
+            }
