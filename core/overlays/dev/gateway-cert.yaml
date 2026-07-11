@@ -13,6 +13,7 @@ spec:
     - dashboard.davidsouther.com.127.0.0.1.nip.io
     - auth.127.0.0.1.nip.io
     - git.davidsouther.com.127.0.0.1.nip.io
+    - flagsmith.127.0.0.1.nip.io
   issuerRef:
     name: agrippa-ca
     kind: ClusterIssuer

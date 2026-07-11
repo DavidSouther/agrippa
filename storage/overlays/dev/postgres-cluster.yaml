@@ -25,3 +25,7 @@ spec:
         login: true
         passwordSecret:
           name: forgejo-db
+      - name: flagsmith
+        login: true
+        passwordSecret:
+          name: flagsmith-db

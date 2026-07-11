@@ -1,0 +1,50 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "0"
+helmCharts:
+  - name: flagsmith
+    repo: https://flagsmith.github.io/flagsmith-charts/
+    version: 0.82.0
+    releaseName: flagsmith
+    namespace: flagsmith
+    valuesInline:
+      devPostgresql:
+        enabled: false
+      databaseExternal:
+        enabled: true
+        urlFromExistingSecret:
+          enabled: true
+          name: flagsmith-database-url
+          key: DATABASE_URL
+      api:
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+        secretKeyFromExistingSecret:
+          enabled: true
+          name: flagsmith-secret-key
+          key: SECRET_KEY
+        bootstrap:
+          enabled: true
+          adminEmail: admin@agrippa.local
+          organisationName: agrippa
+          projectName: agrippa
+      frontend:
+        enabled: true
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            memory: 256Mi
+      sse:
+        enabled: false
+      hpa:
+        # hpa.sse.enabled defaults true even though sse.enabled defaults
+        # false, so without this override the HPA targets a missing Deployment
+        sse:
+          enabled: false

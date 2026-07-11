@@ -1,0 +1,12 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: flagsmith
+  namespace: storage
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  name: flagsmith
+  owner: flagsmith
+  cluster:
+    name: postgres
