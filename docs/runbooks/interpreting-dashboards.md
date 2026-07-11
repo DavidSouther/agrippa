@@ -111,7 +111,7 @@ Per-destination `rate()` over 5-minute windows, one colored band per
   traffic (e.g. `resume` during a browser session against
   `davidsouther.com.127.0.0.1.nip.io`). A brand-new destination appearing
   at nontrivial volume you didn't generate is also worth a look (an
-  unexpected client, or a route now sending traffic somewhere it shouldn't).
+  unexpected client, or a route sending traffic somewhere it shouldn't).
 - **Next step**: `kubectl -n <ns> get pods,httproute` for the missing
   service's namespace; then Explore → Loki (§ 4) scoped to that namespace
   for what the pod itself is logging around the time it went quiet.
@@ -122,7 +122,7 @@ Same shape, split by `response_code` instead of destination.
 
 - **Healthy**: dominated by `200`, plus routine `304`s and the occasional
   benign `404` (see the Alloy-scraping-a-nonexistent-`/metrics`-path
-  example under § 4, which is a real 404 on this cluster right now and
+  example under § 4, which is a real 404 on this cluster and
   not a problem).
 - **Anomaly**: a `5xx` band appears and holds, or `4xx` volume jumps well
   above its usual trickle (could be a broken client, a bad redirect, or a
@@ -226,9 +226,8 @@ kubectl -n observability logs deploy/mimir-distributor --tail=50 | grep -i error
 #   "at least 2 live replicas required, could only find 1"
 ```
 
-That specific error is fixed now (verified live: current
-`mimir-distributor` logs show only harmless `memberlist` transport noise,
-no `push.go` rejections), but the failure mode it demonstrates is
+The `mimir-distributor` logs show only harmless `memberlist` transport
+noise, no `push.go` rejections, but the failure mode it demonstrates is
 permanent: if you're ever unsure whether "no data" means "healthy and
 idle" or "the pipeline is broken," don't trust the dashboard, ask Mimir
 directly:
@@ -269,9 +268,9 @@ Verified live, real output from this cluster:
 2026/07/10 10:43:24 ...eb/routing/logger.go:102:func1() [I] router: completed GET /api/healthz for 10.42.0.1:45192, 200 OK in 1.5ms @ healthcheck/check.go:67(healthcheck.Check)
 ```
 
-Two more patterns that reflect what's actually on this cluster today
+Two more patterns that reflect what's actually on this cluster
 (neither `resume`/`trips` nor `forgejo` logs JSON, so `| json` doesn't
-apply to anything currently running here; see the note below):
+apply to anything running here; see the note below):
 
 ```logql
 # resume/trips are nginx-style access logs (Common Log Format). Text-match
@@ -279,20 +278,20 @@ apply to anything currently running here; see the note below):
 {instance=~"resume/.*"} |= "healthz"
 
 # Regex-match the CLF status-code field to surface 4xx/5xx lines. Verified
-# live: this currently matches a real (benign) 404 -- Alloy's own /metrics
+# live: this matches a real (benign) 404 -- Alloy's own /metrics
 # scrape hitting a path resume doesn't serve, not an incident.
 {instance=~"resume/.*"} |~ " [45][0-9]{2} "
 ```
 
 If a future workload does log structured JSON, the pattern to reach for is
-`{instance=~"<ns>/.*"} | json | <field>="<value>"`, but as of this check
-nothing on `agrippa-dev` needs it: `forgejo` logs its own bracketed
+`{instance=~"<ns>/.*"} | json | <field>="<value>"`, but no workload here
+needs it: `forgejo` logs its own bracketed
 `[I]`/`[E]`-prefixed text format, `resume`/`trips` log nginx CLF, and the
 Gateway pod (`istio-ingress/agrippa-gateway-istio`) doesn't emit
-per-request access logs at all today (Envoy access logging isn't enabled
+per-request access logs at all (Envoy access logging isn't enabled
 on the shared Gateway), just its own control-plane text log. If you need
 a per-request view of Gateway traffic specifically, the Web Analytics
-dashboard's Mimir-backed panels are the source of truth right now, not
+dashboard's Mimir-backed panels are the source of truth, not
 Loki.
 
 ## 5. Explore → Tempo: trace lookup (honest status)
@@ -318,8 +317,8 @@ This is expected given what's actually deployed, not a bug to chase:
 `resume` and `trips` are static sites with zero application-level tracing
 instrumentation, and ambient-mode Istio without a waypoint proxy only
 gets you L4 telemetry for most traffic; the Gateway's own Envoy is the one
-component capable of emitting spans, and it isn't configured to today.
-**Nothing is traced on this cluster right now.** Getting real value out
+component capable of emitting spans, and it isn't configured to do so.
+**Nothing is traced on this cluster.** Getting real value out
 of the Tempo datasource would need, at minimum, a `Telemetry` resource
 turning on Gateway-level tracing (cheapest first step, no app changes),
 and eventually OpenTelemetry instrumentation in any workload that grows

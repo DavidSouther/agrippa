@@ -33,7 +33,7 @@ Read the output like this:
 - **Any pod not `Running` or `Completed`** -- note its phase.
   `CrashLoopBackOff` goes to [§3](#3-a-pod-is-crashloopbackoff); `Pending`
   goes to [§4](#4-a-pod-is-stuck-pending).
-- **`kubectl top nodes` near 100% on either CPU or memory** -- this is very
+- **`kubectl top nodes` near 100% on either CPU or memory** -- this is
   likely the root cause of any Pending pod you just saw. Go straight to
   [`./capacity-and-resource-pressure.md`](./capacity-and-resource-pressure.md).
 
@@ -75,7 +75,7 @@ built -- once an `HTTPRoute` has an explicit `matches:` block and is
 `Synced`, it tends to stay that way. In practice, almost every 5xx or
 timeout traces back to one of the next two symptoms instead:
 
-1. **The pod itself is crash-looping.** Far and away the most common cause.
+1. **The pod itself is crash-looping.** The most common cause.
    Go to [§3](#3-a-pod-is-crashloopbackoff).
 2. **The pod is stuck `Pending`** (never got scheduled at all, so there's
    nothing to route to). Go to [§4](#4-a-pod-is-stuck-pending).
@@ -131,7 +131,7 @@ kubectl -n argocd get application <name> -o jsonpath='{.status.sync.status} {.st
 
 ### Likely causes, ranked
 
-1. **A `HTTPRoute` missing an explicit `matches:` rule.** The single most
+1. **A `HTTPRoute` missing an explicit `matches:` rule.** The most
    common real cause hit in this cluster's own build history. ArgoCD's diff
    does not replicate the Gateway API CRD's own nested-array default for
    `spec.rules[].matches`, so an `HTTPRoute` authored without an explicit
@@ -145,7 +145,7 @@ kubectl -n argocd get application <name> -o jsonpath='{.status.sync.status} {.st
    Fix: add an explicit `matches:` block to the `HTTPRoute` manifest in git
    (see `platform/overlays/dev/forgejo/httproute.yaml` or
    `platform/overlays/dev/keycloak/keycloak-httproute.yaml` for the pattern
-   already in use), commit, push.
+   in use), commit, push.
 
 2. **`syncOptions: [ServerSideApply=true]` without the paired
    `compare-options: ServerSideDiff=true` annotation.** Any CRD whose
