@@ -37,9 +37,9 @@ symptom needs them.
 ## Conventions these runbooks share
 
 - Every change to the platform's own configuration goes through git:
-  `edit -> render-check locally -> commit -> push to origin/main -> ArgoCD
-  reconciles`. There are no feature branches or PRs in this repo's own
-  convention; commits land directly on `main`.
+  `edit -> render-check locally -> commit -> push a feature branch -> open a
+  pull request -> review -> merge into main -> ArgoCD reconciles`. Changes
+  land through a reviewed pull request, not a direct commit to `main`.
 - `export KUBECONFIG="$(k3d kubeconfig write agrippa-dev)"` and
   `kubectl config use-context k3d-agrippa-dev` are assumed at the top of
   every command block below; they're not repeated in each runbook.
