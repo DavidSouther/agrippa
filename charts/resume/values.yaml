@@ -18,9 +18,8 @@ resources:
 
 hostname: davidsouther.com.127.0.0.1.nip.io
 
-# The personal site alone carries a /healthz endpoint (parent design decision
-# 4); toggles the Deployment's probes between /healthz and / and whether the
-# Service/HTTPRoute-visible port is probed via /healthz at all.
+# Toggles the Deployment's probes between /healthz and / -- only the
+# personal site's image serves /healthz.
 healthz: true
 
 service:

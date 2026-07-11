@@ -80,22 +80,15 @@ patches:
         name: argocd-cm
       data:
         kustomize.buildOptions: "--enable-alpha-plugins --enable-exec --enable-helm"
-  # Disables the repo-server's default `git submodule update --init --recursive`
-  # on every checkout of this repo. Required before the Workloads feature-step
-  # commits a `.gitmodules` referencing the private `davidsouther/trips` repo:
-  # the shared `agrippa` repoURL has no repository-credential Secret (a public
-  # repo needs none for its own content), so an unauthenticated recursive
-  # submodule fetch against a private repo 401s -- fatal to manifest generation
-  # for every Application sharing this repoURL (all seven), not just
-  # `workloads`. No per-Application disable exists (argoproj/argo-cd#3799,
-  # open/unimplemented); this global repo-server toggle is the only lever
-  # (`ARGOCD_GIT_MODULES_ENABLED`, already wired from this exact ConfigMap key
-  # in the v3.4.4 install manifest -- confirmed live). Safe: nothing this repo
-  # renders needs submodule *content* fetched by the repo-server itself --
-  # Workloads' own build step (`mise run workloads:build`) does its own
-  # authenticated `git submodule update --init` on the operator's machine
-  # before building the container image; ArgoCD only ever applies the
-  # resulting plain-YAML manifests.
+  # `.gitmodules` references the private `davidsouther/trips` repo; the shared
+  # `agrippa` repoURL carries no repository-credential Secret, so the
+  # repo-server's default recursive submodule fetch 401s there, breaking
+  # manifest generation for every Application on this repoURL. No
+  # per-Application disable exists (argoproj/argo-cd#3799), so this global
+  # toggle is the only lever. Safe: nothing rendered here needs submodule
+  # content from the repo-server itself -- `mise run workloads:build` does
+  # its own authenticated fetch on the operator's machine before building the
+  # image, and ArgoCD only ever applies the resulting plain-YAML manifests.
   - target:
       kind: ConfigMap
       name: argocd-cmd-params-cm

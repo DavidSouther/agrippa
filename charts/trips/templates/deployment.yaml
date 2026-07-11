@@ -1,5 +1,5 @@
-# No /healthz here -- only the personal site (resume) carries one (parent
-# design decision 4); probes target plain /.
+# No /healthz here -- only the resume chart's image serves one; probes
+# target plain /.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

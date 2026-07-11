@@ -1,8 +1,3 @@
-# Wave 0: routes the personal-site dev host through the shared Gateway to
-# the resume Service. `matches` authored explicitly -- Networking's own
-# live-hit trap (an omitted `matches:` left `core` permanently OutOfSync);
-# avoided here by design fiat, same as every other HTTPRoute in this repo
-# (argocd-httproute.yaml, keycloak/forgejo/flagsmith's own httproute.yaml).
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:

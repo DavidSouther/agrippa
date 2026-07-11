@@ -1,5 +1,3 @@
-# The `workloads` layer: David's real, in-cluster static sites, each its own
-# component subdirectory (Namespace + Deployment + Service + HTTPRoute).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:

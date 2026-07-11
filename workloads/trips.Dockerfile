@@ -21,8 +21,8 @@ COPY . .
 RUN npm ci && npm run build
 
 # Stage 2: a minimal static server. No /healthz here -- only the personal
-# site carries one (parent design decision 4); trips' own liveness/readiness
-# probe targets plain `/`.
+# (resume) site carries one; trips' own liveness/readiness probe targets
+# plain `/`.
 #
 # `absolute_redirect off` matches resume.Dockerfile's own build-time finding:
 # TLS terminates upstream at the shared Istio Gateway and this container's

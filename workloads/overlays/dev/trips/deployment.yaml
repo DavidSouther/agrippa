@@ -1,13 +1,7 @@
-# Wave 0: trips.davidsouther.com, David's real trips site (github.com/
-# davidsouther/trips, private, built by scripts/workloads-build.sh into the
-# trips:dev image and `k3d image import`-ed into the node's containerd --
-# imagePullPolicy: Never means this Deployment can only ever schedule
-# against an image already present there; `mise run workloads:build` must be
-# (re-)run against this exact cluster before this syncs, or the pod sits in
-# ErrImageNeverPull. No /healthz here (parent design decision 4) -- probes
-# target plain /. Modest explicit resources -- a static nginx pod is cheap,
-# and the cluster's cumulative resource pressure makes conservative requests
-# the right default.
+# imagePullPolicy: Never schedules only against an image already present on
+# the node -- `mise run workloads:build` must be (re-)run against this exact
+# cluster before this syncs, or the pod sits in ErrImageNeverPull. No
+# /healthz in this image (unlike resume's); probes target plain /.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

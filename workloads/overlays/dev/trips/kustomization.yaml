@@ -1,5 +1,3 @@
-# The `trips` component of the `workloads` layer: trips.davidsouther.com,
-# served from the trips:dev image (scripts/workloads-build.sh).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
