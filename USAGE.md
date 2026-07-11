@@ -18,7 +18,7 @@ kubectl config use-context k3d-agrippa-dev
 Every host below is served through the shared Istio Gateway at `https://<host>`
 via the k3d `:443` port-map. The local CA is deliberately not in your system
 trust store, so `curl` needs `-k` and a browser will warn once per host (the
-`agrippa-dev` root CA is TLS-real, just not publicly trusted). A plain
+`Agrippa Local Dev CA` is TLS-real, just not publicly trusted). A plain
 `https://<host>/` in a browser works after clicking through the warning once.
 
 | Site | Host | Notes |
@@ -203,11 +203,11 @@ compiled into the kustomization by `mise run dashboards:build`
 clobbered on the next build. Changes reconcile the next time ArgoCD syncs the
 `observability` Application.
 
-**Known dev-cluster quirk:** Mimir's default per-tenant ingestion rate limit
-and its ingester ring's `replication_factor` both needed correcting for a
-single-ingester dev deployment (see the two `fix(otel):` commits touching
-`observability/overlays/dev/mimir/kustomization.yaml`) before any metric
-would actually ingest. If a fresh cluster's dashboard shows "No data" for a
+**Known dev-cluster quirk:** Mimir's per-tenant ingestion rate limit and its
+ingester ring's `replication_factor` are tuned for a single-ingester dev
+deployment in `observability/overlays/dev/mimir/kustomization.yaml`; the
+upstream defaults would otherwise prevent any metric from ingesting. If a
+fresh cluster's dashboard shows "No data" for a
 while after `mise run bootstrap`, give Alloy a few minutes to start
 scraping; if it never recovers, check `kubectl -n observability logs
 deploy/mimir-distributor` for `push.go` errors first.

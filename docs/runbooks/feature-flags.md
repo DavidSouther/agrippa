@@ -3,7 +3,7 @@
 How to flip a feature flag on the `agrippa-dev` cluster's Flagsmith
 instance, both by hand through the UI and by script through the API, and
 what this project's own "Release Flag" concept is versus what actually
-exists today. Point `kubectl` at the cluster first if you haven't already
+exists. Point `kubectl` at the cluster first if you haven't already
 this shell session:
 
 ```bash
@@ -15,7 +15,7 @@ Flagsmith lives in the `flagsmith` namespace, deployed via the official
 `Flagsmith/flagsmith-charts` chart pinned at `0.82.0`
 (`platform/overlays/dev/flagsmith/helm/kustomization.yaml`), reconciled by
 the `platform` ArgoCD Application, exposed through the shared Istio Gateway
-at `https://flagsmith.127.0.0.1.nip.io/`. Live-checked while writing this:
+at `https://flagsmith.127.0.0.1.nip.io/`. Live-checked:
 `kubectl -n argocd get application platform` reports `Synced Healthy`,
 `curl -k https://flagsmith.127.0.0.1.nip.io/` returns `200`, and
 `curl -k https://flagsmith.127.0.0.1.nip.io/health` (the Django
@@ -36,8 +36,8 @@ cluster actually reads it yet (see the note at the end of this section).
 `flagsmith-api` pod start. This project's intended login path (the chart's
 own documented single-operator flow, no scripted step) has the operator
 read the one-time password-reset link Flagsmith's bootstrap logs to the API
-pod's stdout. That claim was **not confirmed live** while writing this
-runbook. What was actually checked:
+pod's stdout. That claim is **not confirmed live** in this cluster. What was
+actually checked:
 
 - `kubectl -n flagsmith get secrets` lists exactly three Secrets:
   `flagsmith`, `flagsmith-database-url`, `flagsmith-secret-key`. The first
@@ -61,8 +61,8 @@ runbook. What was actually checked:
 
 Net finding: **first-admin login is an open gap, not a live-verified
 working flow.** Before assuming it's unusable, re-check the logs yourself
--- the pod has been running about a day at time of writing and its log
-buffer may have rotated or a fresh deploy may behave differently:
+-- the pod may have been running long enough that its log buffer rotated, or
+a fresh deploy may behave differently:
 
 ```bash
 kubectl -n flagsmith logs deploy/flagsmith-api -c bootstrap
@@ -77,11 +77,11 @@ setting the password directly against the running app:
 kubectl -n flagsmith exec -it deploy/flagsmith-api -- python manage.py changepassword admin@agrippa.local
 ```
 
-This command was **not run** as part of writing this runbook (it mutates
-the live admin account, outside the read-only scope of this pass) and is
-not asserted anywhere in this repo's design, build, or test record --
-verify the exact management-command name against this image's `manage.py`
-before relying on it. Once you have credentials, log in at
+This command is **not verified** here (it mutates the live admin account,
+outside the read-only scope of this pass) and is not asserted anywhere in
+this repo's design, build, or test record -- verify the exact
+management-command name against this image's `manage.py` before relying on
+it. Once you have credentials, log in at
 `https://flagsmith.127.0.0.1.nip.io/` (the browser will warn about an
 untrusted CA -- that's the local `Agrippa Local Dev CA`, click through it,
 or use `curl -k` for scripted checks).
@@ -127,7 +127,7 @@ environment's settings in the UI), and read flags through OpenFeature's own
 client interface rather than Flagsmith's SDK directly -- keeping the
 workload decoupled from Flagsmith specifically.
 
-**No workload in this cluster does this today.** `resume` and `trips` are
+**No workload in this cluster does this.** `resume` and `trips` are
 both fully static sites (jiffies-built, served by nginx) with no runtime
 code to wire an SDK into. This is a real, deliberate seam: wiring an actual
 workload to an OpenFeature provider was scoped out of this project on
@@ -139,7 +139,7 @@ end-to-end anywhere in this repo yet.
 
 For automation instead of clicking through the UI. Two different surfaces
 exist, confirmed live via an in-cluster `curl` against the `flagsmith-api`
-Service (the API is **not** Gateway-routed today -- the `flagsmith`
+Service (the API is **not** Gateway-routed -- the `flagsmith`
 HTTPRoute only forwards `/health` and `/`; a Gateway-reachable `/api` path,
 which a browser-based OpenFeature client would need, was deliberately left
 for a later feature-step and isn't built here).
@@ -204,18 +204,15 @@ against `flagsmith-charts` `0.82.0` / app `2.238.0` specifically here.
 
 ## 3. This project's own Release Flag concept: design intent vs. reality
 
-Early design work for this project floated a single project-level release
-flag: not a Flagsmith `Feature` object, but a git-level gate -- feature-steps
-would accumulate on a long-lived integration branch, the platform would stay
-unreleased until a final acceptance pass, and promoting that branch to
-`main` would be the flag itself flipping.
+The design floated a single project-level release flag: not a Flagsmith
+`Feature` object, but a git-level gate -- feature-steps would accumulate on a
+long-lived integration branch, the platform would stay unreleased until a
+final acceptance pass, and promoting that branch to `main` would be the flag
+itself flipping.
 
-**This was never built.** Every feature-step here landed directly on
-`main` throughout this project, every layer's ArgoCD Application went live
-and `Synced`/`Healthy` the moment it landed, nothing shipped dark, and there
-was never a separate integration branch. Concretely for this runbook:
-**there is no Flagsmith `Feature` object anywhere in this cluster gating
-platform release, and no mechanism reads one.** Nothing in `overlays/dev`'s
+**This was never built**, and there is no integration branch. Concretely for
+this runbook: **there is no Flagsmith `Feature` object anywhere in this
+cluster gating platform release, and no mechanism reads one.** Nothing in `overlays/dev`'s
 root kustomization is conditionally included based on a flag value. If
 you're troubleshooting Flagsmith day to day, this is a non-issue: every
 flag you'll find in this instance is an ordinary application-level flag

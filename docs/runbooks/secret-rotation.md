@@ -144,11 +144,11 @@ Check what's actually committed before you decide which path applies:
 grep -A2 'secrets/dev' .sops.yaml
 ```
 
-As of this writing, `.sops.yaml`'s comment block above the `secrets/dev/.*`
-rule still opens with "PLACEHOLDER recipient -- replace with the real
-agrippa-age-dev public key" and goes on to note that `mise run rotate-keys`
-updates the file automatically on future rotations -- but the `age:` value
-beneath that stale comment is **already a real, operative key**
+`.sops.yaml`'s comment block above the `secrets/dev/.*` rule opens with
+"PLACEHOLDER recipient -- replace with the real agrippa-age-dev public key"
+and goes on to note that `mise run rotate-keys` updates the file
+automatically on future rotations, but the `age:` value beneath it is a
+real, operative key
 (`age1e8wr0f85w0yfqgxc3pc6426ghlu5xt069znn5yuwrtwz30u23quqjcx6vc`), matching
 what's live in the cluster's `sops-age` Secret in the `argocd` namespace.
 The comment is stale documentation, not a signal that setup is still
@@ -176,34 +176,24 @@ item and mints a brand-new identity**, regardless of whether `.sops.yaml`
 was ever caught up to it. Run it against a fresh-looking `.sops.yaml` and
 you don't fix the placeholder -- you generate a second new key, orphaning
 whatever trust root the live cluster's `sops-age` Secret was already seeded
-with from the *first* real key sitting in Bitwarden. This is exactly the
-kind of desync this project's own build history had to carefully avoid: the
-comment in `.sops.yaml` was left stale specifically because the real key was
-filled in by hand once, separately from any rotation run, and nobody has
-gone back to update the comment since. Don't let that stale comment fool you
-into re-running key generation against a value that's already real and
-already trusted.
+with from the *first* real key sitting in Bitwarden. The comment does not
+match the committed key: the `age:` value is real and trusted, while the
+comment still describes a placeholder. Confirm the live value with the
+`grep` above rather than trusting the comment.
 
 ---
 
-## 5. Fixed: the rotation script's stage ordering
+## 5. The rotation script's stage ordering
 
-Earlier revisions of `scripts/rotate-keys.sh` re-encrypted already-committed
-secrets (via `sops updatekeys`) **before** updating `.sops.yaml`'s recipient.
-`sops updatekeys` re-wraps a file's data key for whatever recipients
-`.sops.yaml`'s matching rule currently lists -- so running re-encryption first
-meant it re-wrapped against the old, about-to-be-archived recipient, a no-op
-from `sops`'s own point of view. `.sops.yaml` would then flip to the new
-recipient afterward, leaving it declaring a recipient that no committed file
-was actually encrypted to.
+`scripts/rotate-keys.sh` reflects the new recipient in `.sops.yaml` (its
+`## Reflect the new recipient in .sops.yaml` block) before re-encrypting
+already-committed secrets (its `## Re-encrypt already-committed secrets under
+the new recipient` block), so the re-encryption pass always targets the
+current recipient. `sops updatekeys` re-wraps a file's data key for whatever
+recipients `.sops.yaml`'s matching rule currently lists, so the recipient has
+to be current before that pass runs. `tests/rotate-keys.bats` asserts a
+decrypt under the new key end to end.
 
-**This is fixed.** `scripts/rotate-keys.sh` now runs its
-`## Reflect the new recipient in .sops.yaml` block before its
-`## Re-encrypt already-committed secrets under the new recipient` block, so
-the re-encryption pass always targets the current recipient.
-`tests/rotate-keys.bats` passes end to end, including the final
-decrypt-under-the-new-key assertion that used to catch this defect.
-
-Key rotation works correctly. No extra caution or dry run is needed beyond
-the normal "Verifying it worked" checks in section 3, which remain the right
-place to confirm any given rotation actually took.
+No extra caution or dry run is needed beyond the "Verifying it worked" checks
+in section 3, which remain the right place to confirm any given rotation
+actually took.
