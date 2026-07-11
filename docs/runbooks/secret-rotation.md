@@ -39,10 +39,10 @@ bw get notes agrippa-age-dev    # prints the current private key material
 ```
 
 `bw create item` / `bw edit item` are how you'd write a Bitwarden item by
-hand, but for rotation itself you don't call these directly -- `scripts/
-rotate-keys.sh` does, as described below. There is no standing local copy of
-the private key at any point; nothing in this flow writes it to a file on
-disk.
+hand, but for rotation itself you don't call these directly --
+`scripts/rotate-keys.sh` does, as described below. There is no standing local
+copy of the private key at any point; nothing in this flow writes it to a file
+on disk.
 
 ## 3. Running rotation end to end
 
@@ -84,7 +84,10 @@ if either is missing:
    in memory only (never written to disk) as `old_identity`, captured before
    the rename. A brand-new item is then created under the original live name
    `agrippa-age-<env>` holding the new identity.
-4. **Re-encrypts already-committed secrets.** For every file under
+4. **Updates `.sops.yaml`.** Replaces the `age` value on the
+   `secrets/<env>/.*` `creation_rules` entry with the new recipient (or adds
+   the rule if this is the environment's first-ever key).
+5. **Re-encrypts already-committed secrets.** For every file under
    `secrets/<env>/` that looks already-encrypted (matches `*.yaml`, `*.yml`,
    `*.json`, or `*.env` and contains a `^sops:` marker), it runs `sops
    updatekeys --yes` against it, with `SOPS_AGE_KEY` set (in-memory only,
@@ -92,9 +95,6 @@ if either is missing:
    decrypting the file's current data key still requires the old private
    key. Anything that fails to re-encrypt is reported at the end for manual
    follow-up, and the script exits non-zero.
-5. **Updates `.sops.yaml`.** Replaces the `age` value on the
-   `secrets/<env>/.*` `creation_rules` entry with the new recipient (or adds
-   the rule if this is the environment's first-ever key).
 
 ### Verifying it worked
 
@@ -145,9 +145,10 @@ grep -A2 'secrets/dev' .sops.yaml
 ```
 
 As of this writing, `.sops.yaml`'s comment block above the `secrets/dev/.*`
-rule still reads "PLACEHOLDER recipient" and "Replace the placeholder below
-with that public key once it exists" -- but the `age:` value beneath that
-stale comment is **already a real, operative key**
+rule still opens with "PLACEHOLDER recipient -- replace with the real
+agrippa-age-dev public key" and goes on to note that `mise run rotate-keys`
+updates the file automatically on future rotations -- but the `age:` value
+beneath that stale comment is **already a real, operative key**
 (`age1e8wr0f85w0yfqgxc3pc6426ghlu5xt069znn5yuwrtwz30u23quqjcx6vc`), matching
 what's live in the cluster's `sops-age` Secret in the `argocd` namespace.
 The comment is stale documentation, not a signal that setup is still
@@ -187,21 +188,20 @@ already trusted.
 
 ## 5. Fixed: the rotation script's stage ordering
 
-Earlier revisions of `scripts/rotate-keys.sh` ran Stage 4 (re-encrypting
-already-committed secrets via `sops updatekeys`) **before** Stage 5 (updating
-`.sops.yaml`'s recipient). `sops updatekeys` re-wraps a file's data key for
-whatever recipients `.sops.yaml`'s matching rule currently lists -- so
-running re-encryption first meant it re-wrapped against the old,
-about-to-be-archived recipient, a no-op from `sops`'s own point of view.
-`.sops.yaml` would then flip to the new recipient afterward, leaving it
-declaring a recipient that no committed file was actually encrypted to.
+Earlier revisions of `scripts/rotate-keys.sh` re-encrypted already-committed
+secrets (via `sops updatekeys`) **before** updating `.sops.yaml`'s recipient.
+`sops updatekeys` re-wraps a file's data key for whatever recipients
+`.sops.yaml`'s matching rule currently lists -- so running re-encryption first
+meant it re-wrapped against the old, about-to-be-archived recipient, a no-op
+from `sops`'s own point of view. `.sops.yaml` would then flip to the new
+recipient afterward, leaving it declaring a recipient that no committed file
+was actually encrypted to.
 
-**This is fixed.** `scripts/rotate-keys.sh` now updates `.sops.yaml`'s
-recipient (the `## Reflect the new recipient in .sops.yaml` block) before
-re-encrypting any already-committed secret (the `## Re-encrypt
-already-committed secrets under the new recipient` block), so the
-re-encryption pass always targets the current recipient. `tests/
-rotate-keys.bats` passes end to end, including the final
+**This is fixed.** `scripts/rotate-keys.sh` now runs its
+`## Reflect the new recipient in .sops.yaml` block before its
+`## Re-encrypt already-committed secrets under the new recipient` block, so
+the re-encryption pass always targets the current recipient.
+`tests/rotate-keys.bats` passes end to end, including the final
 decrypt-under-the-new-key assertion that used to catch this defect.
 
 Key rotation works correctly. No extra caution or dry run is needed beyond

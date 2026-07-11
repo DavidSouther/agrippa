@@ -82,7 +82,7 @@ kubectl get ns
 | --- | --- |
 | `argocd` | ArgoCD itself (server, repo-server, application-controller) |
 | `cnpg-system` | the CloudNativePG Postgres operator |
-| `storage` | the shared `postgres` Cluster and `valkey` |
+| `storage` | the shared `postgres` Cluster, `valkey`, and the `minio-backup` store for Postgres backups |
 | `istio-system` | `istiod`, `ztunnel`, the CNI node agent |
 | `istio-ingress` | the shared Gateway (`agrippa-gateway`) and its TLS Certificate |
 | `cert-manager` | the local CA issuer chain |
@@ -135,10 +135,12 @@ kubectl -n storage run psql-debug --rm -it --image=postgres:17-alpine --restart=
 kubectl -n storage exec -it deploy/valkey -- valkey-cli
 ```
 
-`kubectl -n storage get secrets` lists every sealed credential
-(`<app>-db`, basic-auth type: `username`/`password` keys). The plaintext never
-touches disk outside the cluster; the committed files under `secrets/dev/` are
-sops-encrypted (`DEVELOPMENT.md` § Secrets).
+`kubectl -n storage get secrets` lists every sealed credential in this
+namespace -- the per-app `<app>-db` basic-auth Secrets (`username`/`password`
+keys) plus others that don't follow that shape, such as `minio-backup`
+(S3-style `accessKeyId`/`secretAccessKey` keys for the Postgres backup store).
+The plaintext never touches disk outside the cluster; the committed files under
+`secrets/dev/` are sops-encrypted (`DEVELOPMENT.md` § Secrets).
 
 ## Observability: Grafana, Loki, Mimir, Tempo
 
@@ -156,10 +158,11 @@ valid anywhere else). Three datasources are pre-provisioned:
 - **Tempo** (traces), uid `P214B5B846CF3925F`. Explore → Tempo, search by
   service name.
 
-These uids are pinned explicitly in `observability/overlays/dev/grafana/
-kustomization.yaml` (Grafana auto-derives one otherwise, but won't let a
-later config change reassign it against already-persisted state, so once a
-dashboard references one, treat it as fixed).
+These uids are pinned explicitly in
+`observability/overlays/dev/grafana/kustomization.yaml` (Grafana auto-derives
+one otherwise, but won't let a later config change reassign it against
+already-persisted state, so once a dashboard references one, treat it as
+fixed).
 
 Everything is collected by one Alloy DaemonSet via Kubernetes self-discovery
 (no Prometheus Operator/ServiceMonitor CRDs in this cluster):
@@ -187,12 +190,17 @@ of which workload/platform-service it hit):
 - Request/response bytes transferred.
 - A detail table: source workload, destination, status code, request count.
 
-The dashboard definition lives in that same `kustomization.yaml` (a
-`dashboardProviders`/`dashboards` block using the chart's sidecar-free
+The dashboard's compiled JSON is spliced into that same `kustomization.yaml`
+(a `dashboardProviders`/`dashboards` block using the chart's sidecar-free
 provisioning path, the same mechanism as the datasources above), so it's
-GitOps-managed like everything else. Edit the JSON there and push to change
-it; changes reconcile the next time ArgoCD syncs the `observability`
-Application.
+GitOps-managed like everything else. That spliced JSON is generated output,
+not the source of truth: the dashboard is authored in Grafonnet at
+`observability/overlays/dev/grafana/dashboards/web-analytics/main.jsonnet` and
+compiled into the kustomization by `mise run dashboards:build`
+(`scripts/dashboards-build.sh`). To change it, edit `main.jsonnet`, run
+`mise run dashboards:build`, then push -- hand-editing the spliced JSON gets
+clobbered on the next build. Changes reconcile the next time ArgoCD syncs the
+`observability` Application.
 
 **Known dev-cluster quirk:** Mimir's default per-tenant ingestion rate limit
 and its ingester ring's `replication_factor` both needed correcting for a
@@ -221,8 +229,9 @@ kubectl -n forgejo get secret forgejo-admin -o jsonpath='{.data.password}' | bas
 # username is in the same secret's `username` key
 
 kubectl -n flagsmith get secret flagsmith -o jsonpath='{.data}' | jq .
-# Flagsmith's own bootstrap sends a one-time password-reset link to the admin
-# email on first login rather than sealing a usable password directly.
+# No sealed admin credential exists here, and first-admin login is an open gap
+# (no SMTP configured, no verified reset-link flow) -- see
+# docs/runbooks/feature-flags.md for details.
 ```
 
 ## mise tasks (the full command surface)
@@ -233,11 +242,14 @@ mise run cluster:up        # create/start the k3d cluster
 mise run cluster:down      # delete it
 mise run bootstrap         # sops-age trust root + KSOPS ArgoCD + root app-of-apps
 mise run workloads:build   # build+import the resume/trips container images
+mise run dashboards:build  # compile the Grafonnet Web Analytics dashboard into grafana's kustomization
 mise run rotate-keys       # rotate an environment's age keypair
-mise run test:push         # kubeconform + conftest + helm-unittest, no cluster
+mise run test:push         # test:static + test:policy + test:chart, no cluster
+mise run test:static       # kubeconform + plaintext-Secret conftest guard
+mise run test:policy       # conftest verify over tests/policy/*_test.rego
+mise run test:chart        # helm-unittest across charts/*/tests
 mise run test:feature      # throwaway k3d cluster, chainsaw + bats probes
 mise run test:gestalt      # tests/agrippa.bats against the current ENV target
-mise run test:chart        # helm-unittest across charts/*/tests
 ```
 
 ```bash
