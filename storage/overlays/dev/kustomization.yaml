@@ -4,6 +4,7 @@ resources:
   - namespace.yaml
   - cnpg-operator/
   - ../../../secrets/dev/storage
+  - minio/
   - postgres-cluster.yaml
   - valkey/
   - smoke-database.yaml
