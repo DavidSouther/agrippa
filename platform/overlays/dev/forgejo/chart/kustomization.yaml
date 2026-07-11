@@ -1,50 +1,16 @@
-# Chart values for Forgejo, against the shared postgres Cluster's forgejo
-# database/role (forgejo-database.yaml) and the sealed admin/db credentials
-# (secrets/dev/platform/forgejo/).
-#
-# `code.forgejo.org/forgejo-helm/forgejo-helm` 404s -- the correct OCI chart
-# path is `oci://code.forgejo.org/forgejo-helm/forgejo`. Pinned to 17.1.1
-# (appVersion 15.0.3); the `version:` field below is the actual enforcement,
-# this note is just so the pin isn't mistaken for an oversight.
-#
-# The chart's `templates/tests/` hook renders a literal, permanent test Pod
-# (helm.sh/hook semantics ArgoCD doesn't understand, same as
-# storage/overlays/dev/valkey's kustomization.yaml) -- skipTests excludes
-# it. Unlike Valkey, this chart's templates use the bitnami-common
-# `common.names.namespace` helper, which writes `.Release.Namespace`
-# explicitly onto every object's metadata.namespace -- so
-# helmCharts[].namespace: forgejo is sufficient on its own, and Valkey's
-# kubernetes-sigs/kustomize#6058 `patches:` workaround is not needed here.
-#
-# `gitea.additionalConfigFromEnvs` entries are spliced directly into the
-# init container's `env:` list (templates/gitea/deployment.yaml). Each entry
-# must be a well-formed core/v1 EnvVar object: `name` + `valueFrom.secretKeyRef`,
-# per the chart's own README example. Not an `envName`/`secretKeyRef`
-# shorthand -- that's a Gitea-chart-ism that doesn't exist in this schema,
-# and ArgoCD's ServerSideApply rejects it with "field not declared in schema."
-# FORGEJO__DATABASE__PASSWD follows Forgejo's own FORGEJO__<SECTION>__<KEY>
-# convention, not Gitea's legacy GITEA__ prefix.
-#
-# admin.existingSecret's expected keys are literally `username`/`password`
-# (templates/gitea/deployment.yaml's GITEA_ADMIN_USERNAME/PASSWORD
-# secretKeyRefs), matching admin.enc.yaml's shape.
-#
-# Main-container `resources:` defaults to `{}` (unset) in the chart -- an
-# unbounded request-less container is a noisy-neighbor risk on a
-# single-node dev cluster running Istio, cert-manager, metallb, CNPG,
-# Valkey, Keycloak, and the full LGTM stack, so it's scoped here to a
-# dev-appropriate footprint proactively, mirroring Keycloak's own dev-sized
-# resources.requests.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
   argocd.argoproj.io/sync-wave: "0"
 helmCharts:
   - name: forgejo
+    # Not .../forgejo-helm/forgejo-helm -- that 404s.
     repo: oci://code.forgejo.org/forgejo-helm
     version: 17.1.1
     releaseName: forgejo
     namespace: forgejo
+    # Skips the chart's test-hook Pod, which kustomize renders as a literal
+    # permanent Pod (ArgoCD doesn't run Helm hooks).
     skipTests: true
     valuesInline:
       resources:
@@ -60,6 +26,9 @@ helmCharts:
             HOST: postgres-rw.storage.svc:5432
             NAME: forgejo
             USER: forgejo
+        # Must be well-formed core/v1 EnvVar objects (name +
+        # valueFrom.secretKeyRef); a wrong shape builds fine locally but
+        # ArgoCD's ServerSideApply rejects it at sync time.
         additionalConfigFromEnvs:
           - name: FORGEJO__DATABASE__PASSWD
             valueFrom:
