@@ -15,8 +15,15 @@
 #   Then the observability layer is Synced/Healthy, Grafana answers through the
 #        shared Gateway, the dev credential authenticates and renders the home
 #        dashboard API, and Grafana's Loki/Mimir/Tempo datasources are
-#        registered and returned by its own datasources API -- proving the
-#        stack is wired together, not merely that Grafana itself is up.
+#        registered and returned by its own datasources API -- proving Grafana
+#        is correctly pointed at Loki/Mimir/Tempo and the observability
+#        layer's workloads (including Alloy) are healthy, not merely that
+#        Grafana itself is up.
+#
+# NOTE on scope: this suite proves configuration-level wiring (the datasources
+# are registered under the right names/URLs) and Kubernetes-level health, not
+# an active telemetry round-trip -- no log, trace, or metric is written
+# through Alloy and read back through Loki/Tempo/Mimir here.
 #
 # NOTE: this suite deliberately does NOT tear the cluster, ArgoCD, or the
 # observability stack down. All are long-lived and GitOps-managed; this suite
@@ -70,7 +77,7 @@ wait_for_synced_healthy() {
   [ "$status" -eq 0 ]
 
   # THEN 1: Grafana answers through the shared Gateway at its nip.io host. -k
-  # tolerates the local CA (same convention as networking.bats).
+  # tolerates the local, deliberately-untrusted-by-design dev CA.
   run curl -k -sS -o /dev/null -w '%{http_code}' --max-time 10 "https://${DASH_HOST}/"
   [ "$status" -eq 0 ]
   [[ "$output" =~ ^(2[0-9][0-9]|3[0-9][0-9])$ ]]

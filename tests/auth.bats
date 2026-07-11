@@ -71,7 +71,7 @@ wait_for_synced_healthy() {
   [ "$status" -eq 0 ]
 
   # THEN 1: Keycloak answers through the shared Gateway at its nip.io host. -k
-  # tolerates the local CA (same convention as networking.bats).
+  # tolerates the local, deliberately-untrusted-by-design dev CA.
   run curl -k -sS -o /dev/null -w '%{http_code}' --max-time 10 "https://${AUTH_HOST}/"
   [ "$status" -eq 0 ]
   [[ "$output" =~ ^(2[0-9][0-9]|3[0-9][0-9])$ ]]
@@ -83,9 +83,8 @@ wait_for_synced_healthy() {
   # generic keycloak-admin --from-literal=username=... --from-literal=password=...`
   # regeneration recipe, which is the Keycloak Operator's own
   # bootstrapAdmin.user.secret shape. Read live via kubectl's go-template
-  # base64decode (portable across the GNU/BSD `base64 -d`/`-D` split, same
-  # idiom as storage.bats's credential reads) -- never decrypted from the
-  # sops-encrypted source file.
+  # base64decode (portable across the GNU/BSD `base64 -d`/`-D` split) -- never
+  # decrypted from the sops-encrypted source file.
   admin_user="$(mise x kubectl -- kubectl --context "$CTX" -n "$KEYCLOAK_NS" get secret keycloak-admin \
     -o go-template='{{ index .data "username" | base64decode }}')"
   admin_pass="$(mise x kubectl -- kubectl --context "$CTX" -n "$KEYCLOAK_NS" get secret keycloak-admin \
