@@ -9,9 +9,6 @@ helmCharts:
     releaseName: flagsmith
     namespace: flagsmith
     valuesInline:
-      # Not postgresql.enabled -- the bundled subchart's dependency condition
-      # is `postgresql.enabled,devPostgresql.enabled` (an OR), and
-      # devPostgresql.enabled defaults true, so only this key disables it.
       devPostgresql:
         enabled: false
       databaseExternal:
@@ -48,7 +45,6 @@ helmCharts:
         enabled: false
       hpa:
         # hpa.sse.enabled defaults true even though sse.enabled defaults
-        # false, so without this override the HPA targets a Deployment that
-        # never renders and sits permanently AbleToScale: False.
+        # false, so without this override the HPA targets a missing Deployment
         sse:
           enabled: false
