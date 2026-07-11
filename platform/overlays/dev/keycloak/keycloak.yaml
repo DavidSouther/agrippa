@@ -13,9 +13,10 @@ spec:
       cpu: 250m
     limits:
       memory: 1Gi
-  # host is the shared postgres Cluster's Service, not keycloak-specific;
-  # keycloak-database.yaml's Database CR provisions the `keycloak` database
-  # and owner role this `database:`/usernameSecret pair connects to.
+  # host is the shared postgres Cluster's Service, not keycloak-specific.
+  # The `keycloak` login role is created by storage/overlays/dev/postgres-cluster.yaml's
+  # spec.managed.roles[]; keycloak-database.yaml's Database CR only provisions the
+  # `keycloak` database and assigns that already-existing role as owner.
   db:
     vendor: postgres
     host: postgres-rw.storage.svc
