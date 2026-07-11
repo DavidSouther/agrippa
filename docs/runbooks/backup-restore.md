@@ -1,10 +1,12 @@
 # Backing up and restoring data
 
 You arrived here because you're worried about losing something on
-`agrippa-dev`, or you already have. Read this whole document before you run
-anything: the honest answer is that most of what makes this cluster useful
-day to day has no automated backup today, and this document exists to tell
-you that plainly rather than let you assume otherwise.
+`agrippa-dev`, or you already have. Read the section that matches your
+situation. The short version: Postgres row data now has automated,
+near-zero-RPO backup and point-in-time recovery through CloudNativePG's
+native WAL archiving plus scheduled base backups to a dedicated MinIO. A few
+things still have no automated backup, and this document is explicit about
+which.
 
 ## The one fact that governs everything below
 
@@ -16,17 +18,18 @@ completely different exposure:
   nowhere else needs to. Losing the whole cluster loses none of it.
 - **Runtime data**: rows and files that accumulate only inside the running
   cluster because a human or a workload put them there at some point after
-  deploy. Nothing in git knows this data exists. Losing the PVC that holds it
-  loses it, permanently.
+  deploy. Nothing in git knows this data exists. Losing the volume that holds
+  it loses it, unless something backed it up first.
 
 A `git revert` or a full cluster rebuild restores the first kind perfectly.
-It does nothing at all for the second kind. Confusing the two is the single
-most likely way to lose data on this platform, because "the cluster rebuilds
-from git" is true and also does not mean what it sounds like it means.
+It does nothing at all for the second kind. That distinction still governs
+this whole document. What changed is that one large slice of the second kind,
+Postgres row data, now has a real automated backup path, described in section
+2. The rest of the second kind is enumerated in section 3.
 
 ---
 
-## 1. What IS backed up today: declarative state, in git
+## 1. What IS backed up: declarative state, in git
 
 Every layer (`core`, `storage`, `platform`, `observability`, `workloads`) is
 an ArgoCD `Application` synced from `origin/main`, with sealed credentials
@@ -48,89 +51,211 @@ teardown-and-rebuild procedure, what it reconstructs, and what it does not,
 is [`./disaster-recovery.md`](./disaster-recovery.md); read that first if
 you're facing a whole-cluster problem rather than a single bad dataset.
 
-What this category explicitly does **not** cover is the subject of the next
-section.
+---
+
+## 2. What IS backed up: Postgres row data, via CNPG-native backup
+
+The shared CNPG `Cluster` named `postgres` in the `storage` namespace archives
+its write-ahead log continuously and takes a full base backup on a schedule,
+both to a dedicated MinIO instance. Together these give point-in-time recovery
+to any moment covered by the archive, not just the instants a snapshot ran.
+
+### The pieces, and where they live
+
+- **A dedicated MinIO** (`storage/overlays/dev/minio/`): a single-replica
+  `Deployment` + `Service` + `local-path` PVC named `minio-backup` in the
+  `storage` namespace, exposing an S3-compatible endpoint at
+  `http://minio-backup.storage.svc:9000`. It is deliberately separate from the
+  MinIO that Mimir bundles for its own chunk storage, so Postgres backup
+  availability does not depend on the Observability layer's health. A one-shot
+  bucket-creation hook (`create-bucket.yaml`) makes the `postgres-backups`
+  bucket, because barman-cloud never creates its destination bucket itself.
+- **The object-store credentials** (`secrets/dev/storage/minio/backup.enc.yaml`):
+  an `accessKeyId` / `secretAccessKey` pair, sops-encrypted under the same
+  dev `age` recipient as every other secret and decrypted by KSOPS at sync
+  time. MinIO reads it as its root user; the Cluster reads the same keys as
+  its S3 credentials. Rotating it is a re-encrypt of that one file.
+- **Continuous WAL archiving** (`.spec.backup.barmanObjectStore` on the
+  Cluster): CNPG sets Postgres's `archive_command` to ship every completed WAL
+  segment (gzip-compressed) to `s3://postgres-backups/postgres/`. This is what
+  makes recovery near-zero-RPO: the recovery floor advances with each archived
+  segment, not only with each base backup.
+- **Scheduled base backups** (`storage/overlays/dev/scheduled-backup.yaml`):
+  a `ScheduledBackup` named `postgres-daily`, `method: barmanObjectStore`,
+  `schedule: "0 0 3 * * *"` (03:00 daily, robfig/cron with a leading seconds
+  field), `immediate: true` so a first base backup runs as soon as the
+  resource reconciles rather than waiting for the first 03:00.
+- **Retention** (`.spec.backup.retentionPolicy: 7d`): barman prunes base
+  backups and the WAL they no longer need past seven days. Sized for the dev
+  cluster's small local-path volumes; raise it when a workload needs a longer
+  recovery window, and raise the `minio-backup` PVC to match.
+
+### The honest limit on this claim
+
+This is verified as *correct configuration*, not as *observed working against a
+live cluster*. Everything above renders and schema-validates: the MinIO
+manifests pass kubeconform, the Cluster and `ScheduledBackup` validate against
+the vendored CNPG 1.30 CRD OpenAPI schema, the sealed secret round-trips
+through sops and passes the plaintext-Secret guard, and the full overlay
+composes under `kubectl kustomize --enable-helm`. What has *not* been done here
+is standing up the cluster and watching a backup complete, a WAL segment land
+in the bucket, and a restore come back green. Before trusting this for anything
+that matters, confirm on a running cluster:
+
+```bash
+kubectl -n storage get cluster postgres \
+  -o jsonpath='{.status.conditions[?(@.type=="ContinuousArchiving")].status}{"\n"}'
+kubectl -n storage get backup            # ScheduledBackup-created Backups, phase=completed
+kubectl -n storage exec deploy/minio-backup -- \
+  ls -R /data/postgres-backups | head    # base backups + wals present
+```
+
+Do not read a bare `ContinuousArchiving: True` alone as proof: CNPG's
+`archive_command` can report success before a destination is reachable. Pair it
+with a `Backup` in `phase: completed` and objects actually present in the
+bucket.
 
 ---
 
-## 2. What is NOT backed up today: runtime data
+## 3. What is still NOT backed up automatically
 
-Nothing below has an automated backup. If you lose the volume it lives on,
-you lose the data, full stop, with no current recovery path other than
-whatever you manually dumped beforehand (section 3).
+### The MinIO instance's own durability
 
-### Postgres row data
-
-One shared CNPG `Cluster` named `postgres` in the `storage` namespace, one
-instance, backed by a `local-path` PVC (`rancher.io/local-path`, single node,
-no replication, confirmed live: `kubectl -n storage get pvc postgres-1`).
-Four real databases live on it beyond the `smoke` fixture:
-
-| Database | What's actually at risk |
-| --- | --- |
-| `keycloak` | Users, sessions, and client state created at runtime. The realm *definition* itself (`agrippa` realm, clients, roles) is reimported declaratively from git on every sync via the `KeycloakRealmImport` resource, so that part is not at risk; any user who signed up, any session token issued, and any admin-console change made through the UI rather than the import file, is runtime-only. |
-| `forgejo` | Users, issues, pull request state, wiki metadata, webhooks, tokens: everything Forgejo stores as SQL rows. (Forgejo's actual git repository content is a separate concern entirely, covered in section 6.) |
-| `flagsmith` | Flag *values* an operator sets at runtime through the Flagsmith UI (on/off state, multivariate values, per-environment overrides). The Flagsmith deployment itself is declarative; whatever flag state you've actually flipped is not. |
-| `smoke` | A fixture/proof database used by the storage feature's own probe test. Not real data, not a concern. |
-
-Losing the `postgres-1` PVC, or the node it's scheduled on, loses every row
-in every one of these databases at once, since it is one shared instance
-with no replica (`instances: 1`, `maxSyncReplicas: 0`).
+The backups are only as durable as where they sit, and today that is a single
+`local-path` PVC (`minio-backup`, `storage` namespace) on one node, the same
+single-point exposure as the Postgres PVC it protects. Losing that node loses
+the object store and every base backup and WAL in it at the same time. This is
+adequate for a dev cluster (it protects against the far more common Postgres
+PVC loss, bad-migration, and fat-finger-DELETE cases while the node itself
+survives) but it is not off-cluster durability. Replicating `postgres-backups`
+to genuinely off-cluster storage (a second MinIO, an external S3 bucket, or a
+periodic `mc mirror` off the node) is the remaining deferred hardening. Until
+then, a backup and the primary it protects share a failure domain at the node
+level.
 
 ### Valkey cached state
 
-One `valkey` Deployment (not a StatefulSet: a single pod, no clustering) in
-`storage`, backed by its own `local-path` PVC
-(`kubectl -n storage get pvc valkey`, 512Mi), the same no-replication
-exposure as Postgres. As of today, only
-the `smoke` fixture actually has a Valkey credential (`smoke-valkey`
-Secret); Forgejo isn't wired to it by design and Flagsmith's Redis/Valkey
-cache option is an unenabled, deferred toggle. So right now there's no real
-workload data sitting in Valkey to lose. The moment either of those
-integrations turns on, whatever gets cached there inherits the identical
-single-PVC, no-backup exposure described above with zero additional work
-required to create the gap.
+One `valkey` Deployment (a single pod, no clustering) in `storage`, backed by
+its own `local-path` PVC (512Mi), has no automated backup and no CNPG-style
+equivalent. Today only the `smoke` fixture has a Valkey credential; Forgejo
+isn't wired to it by design and Flagsmith's cache toggle is unenabled, so there
+is no real workload data in Valkey to lose right now. The moment either
+integration turns on, whatever gets cached there inherits the single-PVC,
+no-backup exposure with zero additional work required to create the gap.
 
-### Why this matters more than it might look like
+### Forgejo git repository content
 
-The cluster's own self-healing (ArgoCD's `selfHeal: true`) can make it feel
-like nothing here is ever really at risk, because so much of the platform
-really does repair itself automatically. Runtime data is the exception. No
-reconciler, no `selfHeal`, and no `mise run cluster:up` rebuild brings any of
-this back. It only exists once, in one place, on one unreplicated PVC.
+Postgres holds Forgejo's *metadata* (users, issues, pull-request state,
+webhooks), and that metadata is now covered by section 2 like every other
+database. Forgejo's actual git content, every commit, branch, blob, LFS
+object, and attachment, lives on a *separate* Forgejo PVC
+(`gitea-shared-storage`, namespace `forgejo`, 2Gi, `local-path`), entirely
+outside Postgres. CNPG backup does not touch it. See section 7 for the manual
+mitigation and why it remains an open gap.
 
 ---
 
-## 3. Manual stopgap: `pg_dump` / `pg_dumpall` right now
+## 4. Restoring Postgres from the automated backup
 
-There is no automated backup tier yet (see section 5). Until one exists, the
-only real protection for Postgres row data is a manual dump you take
-yourself and move off-cluster. This section gives commands that were run
-live against `agrippa-dev` while writing this document, so what's marked
-"works" actually works, and what's marked "doesn't work" actually failed
-with the error shown.
+CNPG restores by bootstrapping a **new** Cluster from the object store, not by
+writing back into a running one. You keep the same object store as an
+`externalCluster` source, and the new Cluster replays the base backup plus WAL
+up to the target you choose. Field names below are from the CNPG 1.30 `Cluster`
+CRD (`.spec.bootstrap.recovery`, `.spec.externalClusters`).
 
-Point `kubectl` at the cluster first, same as everywhere else in this repo:
+### Full recovery (latest available point)
+
+Recover to the most recent consistent state the archive can reach:
+
+```yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-restore
+  namespace: storage
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie
+  storage:
+    storageClass: local-path
+    size: 1Gi
+  bootstrap:
+    recovery:
+      source: postgres
+  externalClusters:
+    - name: postgres
+      barmanObjectStore:
+        destinationPath: s3://postgres-backups/
+        endpointURL: http://minio-backup.storage.svc:9000
+        serverName: postgres
+        s3Credentials:
+          accessKeyId:
+            name: minio-backup
+            key: accessKeyId
+          secretAccessKey:
+            name: minio-backup
+            key: secretAccessKey
+        wal:
+          compression: gzip
+```
+
+`source: postgres` points at the `externalClusters[]` entry of the same name;
+its `serverName: postgres` is the folder the original cluster wrote under
+(the default is the source cluster's name). The recovered cluster's own future
+backups should use a *different* `serverName` if it will archive to the same
+bucket, so it never overwrites the history it just recovered from.
+
+### Point-in-time recovery
+
+Add a `recoveryTarget` to stop the replay at a specific moment, transaction, or
+LSN instead of the latest point. The most common is a timestamp, for "restore
+to just before the bad migration at 02:47":
+
+```yaml
+  bootstrap:
+    recovery:
+      source: postgres
+      recoveryTarget:
+        targetTime: "2026-07-11 02:45:00+00"
+```
+
+`recoveryTarget` also accepts `backupID`, `targetLSN`, `targetXID`,
+`targetName`, and `targetImmediate` (stop at the first consistent state). With
+no `recoveryTarget`, recovery runs to the end of the archive (the full-recovery
+case above).
+
+### Cutting over after a restore
+
+`postgres-restore` comes up as a parallel cluster. Cutting the platform over to
+it means repointing the consuming apps (Keycloak, Forgejo, Flagsmith) at the
+new cluster's service, or renaming so the restored cluster takes the `postgres`
+name. Treat that as an incident, not a routine step: the roles and per-app
+`Database` CRs are reconciled continuously by CNPG and, above it, ArgoCD's
+`selfHeal`, so a rename or repoint races those reconcilers. Do it with eyes on
+`kubectl -n storage get cluster` and the consuming apps' logs, and expect it may
+take a second pass. These recovery manifests follow the documented CNPG API but
+have not been exercised end-to-end against this cluster; validate on a scratch
+namespace before a real cutover.
+
+---
+
+## 5. Manual logical exports with `pg_dump` (complementary, still useful)
+
+The automated backup in section 2 is a *physical* backup: whole-cluster,
+byte-level, ideal for disaster recovery and PITR. It is not the right tool for
+"give me a portable SQL file of just the `flagsmith` database to load
+elsewhere," or "extract one table." For those, a logical `pg_dump` is still the
+answer, and it needs no extra setup.
+
+Point `kubectl` at the cluster and find the primary:
 
 ```bash
 export KUBECONFIG="$(k3d kubeconfig write agrippa-dev)"
 kubectl config use-context k3d-agrippa-dev
-```
-
-Find the CNPG primary pod:
-
-```bash
 POD=$(kubectl -n storage get cluster postgres -o jsonpath='{.status.currentPrimary}')
-echo "$POD"
 ```
 
-### Option A: per-database `pg_dump` (works today, no extra setup)
-
-This is the same connection pattern `USAGE.md`'s "The database: Postgres and
-Valkey" section uses for `psql`, applied to `pg_dump` instead, using each
-app's own already-sealed credential (`<app>-db` Secret, from
-`kubectl -n storage get secrets`). No superuser or extra privilege needed:
-each app's role owns its own database's tables.
+### Per-database `pg_dump` (works with each app's own credential)
 
 ```bash
 # example: forgejo
@@ -140,88 +265,45 @@ kubectl -n storage exec "$POD" -c postgres -- env PGPASSWORD="$PASS" \
   > ~/agrippa-backups/forgejo-$(date +%Y%m%d-%H%M%S).sql
 ```
 
-Repeat for `keycloak-db`/`keycloak` and `flagsmith-db`/`flagsmith`. Two
-details that matter:
+Repeat for `keycloak-db`/`keycloak` and `flagsmith-db`/`flagsmith`. Two details
+that matter:
 
-- **No `-it` on the `kubectl exec`.** `-it` allocates a TTY meant for an
-  interactive session; it will inject control characters into the dump
-  stream. Plain `kubectl exec` (no `-i`, no `-t`) streams `pg_dump`'s stdout
-  cleanly to your shell, which the `>` redirect then writes to a file on
-  *your machine*, not the pod's PVC. That's the whole point: a dump sitting
-  only on the same PVC it's meant to protect against is not a real backup.
-- **Pick a destination outside this repo.** `~/agrippa-backups/` above is a
-  placeholder: use any path outside the git working tree. These dumps
-  contain real user data, session tokens, and (depending on the table) may
-  contain credential-adjacent material, and this project's committed-secret
-  discipline (`DEVELOPMENT.md` § Secrets) is sops-encryption-or-nothing.
-  A plaintext SQL dump does not meet that bar and should never be committed,
-  encrypted or not.
+- **No `-it` on the `kubectl exec`.** A TTY injects control characters into the
+  dump stream. Plain `kubectl exec` streams `pg_dump`'s stdout cleanly, which
+  the `>` redirect writes to a file on *your machine*, not the pod's PVC.
+- **Pick a destination outside this repo.** `~/agrippa-backups/` is a
+  placeholder. These dumps hold real user data and session tokens; a plaintext
+  SQL dump does not meet this project's sops-encryption-or-nothing bar for
+  secrets and must never be committed.
 
-Confirmed live: this exact command, run against `forgejo`, produced a clean
-`pg_dump` SQL stream (exit code 0). All four app roles (`smoke`, `keycloak`,
-`forgejo`, `flagsmith`) have `SELECT`/dump rights on their own database only,
-by ordinary Postgres ownership, nothing special was granted for this to
-work.
+### Whole-cluster `pg_dumpall` does not work here
 
-### Option B: whole-cluster `pg_dumpall` (does NOT work today)
-
-`pg_dumpall` needs to read role definitions out of `pg_authid`, which
-requires superuser. Tried live against this cluster using a per-app
-credential:
-
-```bash
-PASS=$(kubectl -n storage get secret forgejo-db -o jsonpath='{.data.password}' | base64 -d)
-kubectl -n storage exec "$POD" -c postgres -- env PGPASSWORD="$PASS" \
-  pg_dumpall -h localhost -U forgejo
-```
-
-```text
-pg_dumpall: error: query failed: ERROR:  permission denied for table pg_authid
-```
-
-That's expected, not a fluke: this Cluster's spec sets
-`enableSuperuserAccess: false`, so CNPG never creates a
-`postgres-superuser` Secret (confirmed live,
-`kubectl -n storage get secret postgres-superuser` returns `NotFound`). The
-`postgres` role itself does exist and is genuinely a superuser
-(`kubectl -n storage exec "$POD" -c postgres -- psql -U app -d app -c '\du'`
-shows `Superuser, Create role, Create DB, Replication, Bypass RLS`), but CNPG
-holds it as an internally "reserved" managed role and its password is never
-exposed as a credential you can read. The only roles with an accessible
-password today are the four `managed.roles` app roles (`smoke`, `keycloak`,
-`forgejo`, `flagsmith`) plus `app`, the `initdb` bootstrap owner of an
-otherwise-unused `app` database, which is not a superuser either (it can
-`CONNECT` to other apps' databases thanks to Postgres's default public
-`CONNECT` grant, but cannot read their tables: a live
-`pg_dump -U app -d forgejo` attempt failed with
-`permission denied for table version`).
-
-**Bottom line: `pg_dumpall` is not currently possible against this cluster
-without a deliberate privilege change** (for example, flipping
-`enableSuperuserAccess: true` on the `Cluster` spec, which is itself a real
-security-posture decision, not a backup-runbook footnote, and is not
-recommended here). Until that changes, back up database by database with
-Option A.
+`pg_dumpall` reads role definitions from `pg_authid`, which needs superuser.
+This Cluster does not set `enableSuperuserAccess`, so no `postgres-superuser`
+credential is exposed, and the only readable passwords are the four managed app
+roles plus the non-superuser `app` owner. A `pg_dumpall` with an app credential
+fails with `permission denied for table pg_authid`. This is expected, not a
+regression: for a whole-cluster consistent capture, use the physical backup in
+section 2, which is exactly the case it exists for. `pg_dump` per database
+remains the logical-export path.
 
 ---
 
-## 4. Restoring from a dump
+## 6. Restoring from a logical dump
 
-The reverse of Option A. Use `-i`, not `-it`, so stdin carries the file
-cleanly rather than a terminal:
+The reverse of section 5. Use `-i`, not `-it`, so stdin carries the file
+cleanly:
 
 ```bash
 POD=$(kubectl -n storage get cluster postgres -o jsonpath='{.status.currentPrimary}')
 PASS=$(kubectl -n storage get secret forgejo-db -o jsonpath='{.data.password}' | base64 -d)
 kubectl -n storage exec -i "$POD" -c postgres -- env PGPASSWORD="$PASS" \
-  psql -h localhost -U forgejo -d forgejo < ~/agrippa-backups/forgejo-20260710-060000.sql
+  psql -h localhost -U forgejo -d forgejo < ~/agrippa-backups/forgejo-20260711-020000.sql
 ```
 
-If the dump was instead taken with `pg_dump -Fc` (custom format, worth using
-over the plain-SQL default above once you're restoring anything nontrivial:
-it supports parallel restore and picking individual tables back out), use
-`pg_restore` against the same connection instead of piping SQL through
-`psql`:
+If the dump was taken with `pg_dump -Fc` (custom format, worth using for
+anything nontrivial: parallel restore, selective table extraction), use
+`pg_restore` instead of piping SQL through `psql`:
 
 ```bash
 kubectl -n storage cp ./forgejo.dump "$POD":/tmp/forgejo.dump -c postgres
@@ -229,97 +311,47 @@ kubectl -n storage exec -i "$POD" -c postgres -- env PGPASSWORD="$PASS" \
   pg_restore -h localhost -U forgejo -d forgejo --clean --if-exists /tmp/forgejo.dump
 ```
 
-### The caveat this runbook does not solve
-
-This Cluster's databases and roles are declaratively managed: a per-app CNPG
-`Database` CR and `managed.roles[]` entry are reconciled continuously by
-both CNPG and, upstream of that, ArgoCD's own `selfHeal`. Restoring into a
-database while that reconciliation is active is a real risk worth knowing
-about, not something worked out here: a restore that recreates objects with
-different ownership or grants than what `managed.roles` expects, or that
-races a CNPG role-password rotation, can end up fought over by the
-reconciler rather than landing cleanly. There's no documented safe sequence
-for this in the current build. If you're doing a real restore, treat it as
-an incident: watch `kubectl -n storage get cluster postgres` and the
-consuming app's pod logs closely afterward, and be ready for the possibility
-that something needs a second pass.
+The same reconciler caveat as section 4 applies: this Cluster's databases and
+roles are continuously reconciled by CNPG and ArgoCD's `selfHeal`. A logical
+restore that recreates objects with different ownership or grants than
+`managed.roles` expects, or that races a role-password rotation, can be fought
+over by the reconciler. Treat a real restore as an incident and watch the
+Cluster and the consuming app closely afterward.
 
 ---
 
-## 5. What real backup automation would need (not built yet)
+## 7. Forgejo and Flagsmith specifically
 
-This section is forward-looking. Nothing here exists in the cluster today;
-it's this runbook's own deferred-work note, so the intent isn't lost by the
-time someone picks it up.
+### Forgejo: the git PVC is a separate, still-open gap
 
-CloudNativePG has its own native backup and point-in-time-recovery support:
-WAL archiving to object storage, plus `Backup` and `ScheduledBackup` CRDs
-that bracket a CSI volume snapshot (or a `barman-cloud`-style base backup)
-with `pg_backup_start`/`pg_backup_stop` for an application-consistent
-result. That capability could replace the manual `pg_dump` stopgap above
-with near-zero-RPO recovery. None of it is wired up here:
+Section 2 now covers Forgejo's Postgres metadata like any other database. It
+does *not* cover Forgejo's git content, which lives on the independent
+`gitea-shared-storage` PVC (namespace `forgejo`, 2Gi, `local-path`). No
+automated backup reaches that PVC. The most direct manual mitigation is a
+filesystem copy off it (`kubectl exec ... tar czf - /data | ...` into a local
+archive, or `kubectl cp`), which this document does not turn into a verified
+procedure because it hasn't been run and checked the way section 5's commands
+were. Treat it as an open gap. Off-cluster durability for this PVC belongs in
+the same deferred-hardening bucket as MinIO's own durability (section 3).
 
-- `.spec.backup` and `.spec.plugins` are both empty on the `postgres`
-  Cluster (confirmed live). No object storage destination is configured.
-- The `backups.postgresql.cnpg.io` and `scheduledbackups.postgresql.cnpg.io`
-  CRDs are already installed (they ship with the CNPG operator itself,
-  version 1.30.0 here), but zero `Backup` or `ScheduledBackup` resources
-  exist anywhere in the cluster. The capability is latent, not configured.
-- One easy-to-misread detail: `kubectl -n storage get cluster postgres`
-  reports a `ContinuousArchiving: True` / "Continuous archiving is working"
-  condition. Don't read that as "WAL is being backed up somewhere safe." The
-  Cluster's `archive_command` is CNPG's own `manager wal-archive`, which
-  reports success even with no configured backup destination: there is no
-  object store or plugin target for it to actually ship WAL segments to
-  today, so this condition is not evidence of any recoverable backup
-  existing.
+### Flagsmith: fully covered
 
-The trigger to build this is any Postgres-backed workload needing RPO
-under 2 hours, real point-in-time recovery, or a guaranteed
-application-consistent restore rather than the crash-consistent volume
-snapshot a naive backup would otherwise give. Until that trigger is hit,
-section 3's manual `pg_dump` is what exists.
-
----
-
-## 6. Forgejo and Flagsmith specifically
-
-### Forgejo: a second, separate gap the pg_dump approach does not cover
-
-Postgres only holds Forgejo's *metadata*: users, issues, pull request state,
-webhooks, the rows enumerated in section 2. The actual git repository
-content, every commit, branch, and blob, along with LFS objects and
-uploaded attachments, lives on Forgejo's own PVC
-(`gitea-shared-storage`, namespace `forgejo`, 2Gi, `local-path`, confirmed
-live), completely independent of Postgres. Dumping the `forgejo` database
-with `pg_dump` (section 3) does not back up a single commit.
-
-There is no current backup path for this PVC either, manual or automated.
-The most direct manual mitigation, if you need one today, is a plain
-filesystem copy off that PVC (`kubectl cp` from the Forgejo pod, or a
-`kubectl exec ... tar czf - /data | ...` into a local archive), which this
-document does not attempt to turn into a procedure since it hasn't been run
-and verified the way section 3's commands have. Treat it as an open gap, not
-a solved one.
-
-### Flagsmith: fully covered by the pg_dump approach above
-
-Flagsmith's flag *definitions* (projects, environments, flag keys, and the
-runtime values an operator sets through the UI) are ordinary rows in the
-`flagsmith` Postgres database, no different from any other table covered in
-section 2 and section 3's Option A. There is no separate PVC or
-workload-specific store to worry about beyond what's already described
-above.
+Flagsmith's flag definitions and the runtime values an operator sets through
+the UI are ordinary rows in the `flagsmith` Postgres database, so they are
+covered by the automated backup in section 2 with no separate store to worry
+about.
 
 ---
 
 ## Quick-reference
 
-| Situation | What actually protects you today |
+| Situation | What protects you |
 | --- | --- |
 | Whole cluster destroyed or rebuilt from scratch | Git, via `mise run cluster:up` + `mise run bootstrap`; see [`./disaster-recovery.md`](./disaster-recovery.md). Declarative state only. |
-| Bad Postgres rows in `keycloak`/`forgejo`/`flagsmith`/`smoke` | Nothing automated. A manual `pg_dump` you took beforehand (section 3, Option A), restored per section 4. |
-| Need a whole-cluster consistent Postgres snapshot | Not possible today: no accessible superuser credential, `pg_dumpall` fails (section 3, Option B). |
-| Lost the `postgres-1` or `valkey` PVC with no prior manual dump | Data is gone. No recovery path exists. |
-| Lost Forgejo git repository content (`gitea-shared-storage` PVC) | Data is gone unless you separately copied it off; `pg_dump` never touched it (section 6). |
-| Want real automated backup / PITR | Not built. CNPG's native `Backup`/`ScheduledBackup` + WAL archiving is the documented, deferred path (section 5). |
+| Bad Postgres rows / dropped table in `keycloak`/`forgejo`/`flagsmith`/`smoke` | Automated CNPG backup: bootstrap a new Cluster with `recovery` + `recoveryTarget.targetTime` to just before the damage (section 4). |
+| Lost the `postgres-1` PVC or its node | Automated CNPG backup restores from MinIO, as long as the `minio-backup` PVC / node survived (section 4). |
+| Need a portable SQL export of one database | `pg_dump` per database (section 5), restored per section 6. |
+| Need a whole-cluster consistent Postgres capture | The physical backup in section 2; `pg_dumpall` still doesn't work (no exposed superuser, section 5). |
+| Lost the `minio-backup` PVC / its node too | Backups on it are gone; off-cluster durability of MinIO is still deferred (section 3). |
+| Lost Forgejo git content (`gitea-shared-storage` PVC) | No automated path; manual filesystem copy only, still an open gap (section 7). |
+| Lost Valkey PVC | No backup; no real data there today (section 3). |

@@ -30,7 +30,7 @@ symptom needs them.
 | [feature-flags.md](./feature-flags.md) | You want to flip a flag in Flagsmith, or understand this project's own (designed-but-not-yet-built) release-flag concept. Documents a real open gap: no confirmed working admin-credential path into Flagsmith exists yet. |
 | [interpreting-dashboards.md](./interpreting-dashboards.md) | You're looking at the Grafana "Web Analytics" dashboard, or Loki/Tempo Explore, and want to know what healthy looks like versus an anomaly, and what to do about each. Includes a hard-won warning: an empty panel can mean "healthy and idle" or "the pipeline itself is broken," and looks identical either way. |
 | [secret-rotation.md](./secret-rotation.md) | You need to rotate the `age` keypair, or (more commonly) you're tempted to run `rotate-keys` to fix a placeholder value in `.sops.yaml` -- don't; read this first. The rotation script's stage-ordering bug is fixed and its test suite passes. |
-| [backup-restore.md](./backup-restore.md) | You want to know what's actually protected against data loss (declarative config: yes, RPO 0 via git; Postgres row data, Forgejo repo content, Valkey cache: no, not yet) and how to `pg_dump` a stopgap backup today. |
+| [backup-restore.md](./backup-restore.md) | You want to know what's actually protected against data loss. Declarative config: yes, RPO 0 via git. Postgres row data: yes, now automated (CNPG continuous WAL archiving + daily base backups to a dedicated MinIO, with point-in-time recovery). Still uncovered: Forgejo git-repo content, Valkey cache, and off-cluster durability of the MinIO backup store itself. |
 | [capacity-and-resource-pressure.md](./capacity-and-resource-pressure.md) | A pod won't schedule, or got OOMKilled. This single-node dev cluster runs the entire platform with no headroom to spare; this runbook has the live baseline numbers and the real fix pattern (with two worked examples already in the codebase). |
 | [disaster-recovery.md](./disaster-recovery.md) | You want to stop debugging and just rebuild. Short, because this platform's whole design point is that a full rebuild from git is cheap and reliable -- the honest caveat is that it's also a data-loss event for anything not declared in git (see backup-restore.md). |
 
@@ -55,9 +55,11 @@ relevant runbook:
 
 - **Flagsmith has no confirmed working admin login path** (`feature-flags.md`).
 - **`pg_dumpall` doesn't work today** (only per-database `pg_dump`, since no
-  Postgres superuser credential is exposed) and CNPG's `ContinuousArchiving:
-  True` status is misleading (no object-storage destination is actually
-  configured, so it archives WAL nowhere durable) (`backup-restore.md`).
+  Postgres superuser credential is exposed); for a whole-cluster capture, use
+  the automated physical backup instead. Postgres row data now has automated
+  CNPG backup and point-in-time recovery to a dedicated MinIO; the remaining
+  gap is that MinIO's own store is still single-node local-path, not
+  off-cluster (`backup-restore.md`).
 - **Live memory usage on the dev node already exceeds `GETTING_STARTED.md`'s
   documented 4 CPU / 8GB minimum** (`capacity-and-resource-pressure.md`) --
   worth updating that document's stated floor.
