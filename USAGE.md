@@ -218,12 +218,11 @@ Realm metadata (issuer, endpoints) is public at
 
 ```bash
 kubectl -n forgejo get secret forgejo-admin -o jsonpath='{.data.password}' | base64 -d; echo
-# username is in the same secret's `username` key (or check plan.md for the fixed value)
+# username is in the same secret's `username` key
 
 kubectl -n flagsmith get secret flagsmith -o jsonpath='{.data}' | jq .
 # Flagsmith's own bootstrap sends a one-time password-reset link to the admin
-# email on first login rather than sealing a usable password directly -- see
-# .ailly/developer/2026-07-06-A-agrippa-local-k3d/features/feature-flags-flagsmith/design.md
+# email on first login rather than sealing a usable password directly.
 ```
 
 ## mise tasks (the full command surface)
@@ -234,7 +233,7 @@ mise run cluster:up        # create/start the k3d cluster
 mise run cluster:down      # delete it
 mise run bootstrap         # sops-age trust root + KSOPS ArgoCD + root app-of-apps
 mise run workloads:build   # build+import the resume/trips container images
-mise run rotate-keys       # rotate an environment's age keypair (see known issue below)
+mise run rotate-keys       # rotate an environment's age keypair
 mise run test:push         # kubeconform + conftest + helm-unittest, no cluster
 mise run test:feature      # throwaway k3d cluster, chainsaw + bats probes
 mise run test:gestalt      # tests/agrippa.bats against the current ENV target
@@ -271,10 +270,6 @@ kubectl -n argocd exec deploy/argocd-repo-server -- kustomize build --enable-hel
 docker port k3d-agrippa-dev-serverlb    # confirm :443 is actually port-mapped
 kubectl -n istio-ingress get gateway,httproute
 ```
-
-`tests/rotate-keys.bats` is a known pre-existing failure (a stage-ordering bug
-in `scripts/rotate-keys.sh`, unrelated to any live secret or the cluster's own
-trust root) -- see `.ailly/developer/TASKS.md` § Secrets for the root cause.
 
 ## Tearing down
 

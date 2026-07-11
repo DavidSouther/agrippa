@@ -85,12 +85,11 @@ One `valkey` Deployment (not a StatefulSet: a single pod, no clustering) in
 exposure as Postgres. As of today, only
 the `smoke` fixture actually has a Valkey credential (`smoke-valkey`
 Secret); Forgejo isn't wired to it by design and Flagsmith's Redis/Valkey
-cache option is an unenabled, deferred toggle (both documented in
-`.ailly/developer/TASKS.md`). So right now there's no real workload data
-sitting in Valkey to lose. The moment either of those integrations turns on,
-whatever gets cached there inherits the identical single-PVC, no-backup
-exposure described above with zero additional work required to create the
-gap.
+cache option is an unenabled, deferred toggle. So right now there's no real
+workload data sitting in Valkey to lose. The moment either of those
+integrations turns on, whatever gets cached there inherits the identical
+single-PVC, no-backup exposure described above with zero additional work
+required to create the gap.
 
 ### Why this matters more than it might look like
 
@@ -250,9 +249,9 @@ that something needs a second pass.
 ## 5. What real backup automation would need (not built yet)
 
 This section is forward-looking. Nothing here exists in the cluster today;
-it names the path this project has already chosen not to build yet, per
-`.ailly/developer/TASKS.md` § Storage / DR, so the intent isn't lost by the
-time someone picks it up.
+it's this runbook's own deferred-work note, so the intent isn't lost by the
+time someone picks it up: review CloudNativePG for application-consistent
+Postgres backup and point-in-time recovery.
 
 CloudNativePG has its own native backup and point-in-time-recovery support:
 WAL archiving to object storage, plus `Backup` and `ScheduledBackup` CRDs
@@ -276,8 +275,8 @@ with near-zero-RPO recovery. None of it is wired up here:
   today, so this condition is not evidence of any recoverable backup
   existing.
 
-Per `TASKS.md`, the trigger to build this is any Postgres-backed workload
-needing RPO under 2 hours, real point-in-time recovery, or a guaranteed
+The trigger to build this is any Postgres-backed workload needing RPO
+under 2 hours, real point-in-time recovery, or a guaranteed
 application-consistent restore rather than the crash-consistent volume
 snapshot a naive backup would otherwise give. Until that trigger is hit,
 section 3's manual `pg_dump` is what exists.
@@ -324,4 +323,4 @@ above.
 | Need a whole-cluster consistent Postgres snapshot | Not possible today: no accessible superuser credential, `pg_dumpall` fails (section 3, Option B). |
 | Lost the `postgres-1` or `valkey` PVC with no prior manual dump | Data is gone. No recovery path exists. |
 | Lost Forgejo git repository content (`gitea-shared-storage` PVC) | Data is gone unless you separately copied it off; `pg_dump` never touched it (section 6). |
-| Want real automated backup / PITR | Not built. CNPG's native `Backup`/`ScheduledBackup` + WAL archiving is the documented, deferred path (section 5, `.ailly/developer/TASKS.md` § Storage / DR). |
+| Want real automated backup / PITR | Not built. CNPG's native `Backup`/`ScheduledBackup` + WAL archiving is the documented, deferred path (section 5). |

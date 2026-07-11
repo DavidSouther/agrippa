@@ -50,8 +50,8 @@ symptom needs them.
 ## Known gaps these runbooks surface, not hide
 
 Writing these runbooks against the live cluster (rather than from memory)
-surfaced a few real, previously undocumented issues, now recorded in
-`.ailly/developer/TASKS.md` and in the relevant runbook:
+surfaced a few real, previously undocumented issues, recorded in the
+relevant runbook:
 
 - **Flagsmith has no confirmed working admin login path** (`feature-flags.md`).
 - **`pg_dumpall` doesn't work today** (only per-database `pg_dump`, since no

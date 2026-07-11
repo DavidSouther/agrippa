@@ -33,11 +33,11 @@ cluster actually reads it yet (see the note at the end of this section).
 `api.bootstrap.enabled: true` is set in the chart values
 (`adminEmail: admin@agrippa.local`, `organisationName: agrippa`,
 `projectName: agrippa`), which runs a `bootstrap` initContainer on every
-`flagsmith-api` pod start. design.md's User Journey step 3 describes the
-login path as "the operator reads the one-time password-reset link
-Flagsmith's bootstrap logs to the API pod's stdout... the chart's own
-documented single-operator flow." That claim was **not confirmed live**
-while writing this runbook. What was actually checked:
+`flagsmith-api` pod start. This project's intended login path (the chart's
+own documented single-operator flow, no scripted step) has the operator
+read the one-time password-reset link Flagsmith's bootstrap logs to the API
+pod's stdout. That claim was **not confirmed live** while writing this
+runbook. What was actually checked:
 
 - `kubectl -n flagsmith get secrets` lists exactly three Secrets:
   `flagsmith`, `flagsmith-database-url`, `flagsmith-secret-key`. The first
@@ -129,19 +129,20 @@ workload decoupled from Flagsmith specifically.
 
 **No workload in this cluster does this today.** `resume` and `trips` are
 both fully static sites (jiffies-built, served by nginx) with no runtime
-code to wire an SDK into. This is a real, deliberate seam left by Feature 7
-(feature-flags-flagsmith design.md, Out of scope: "wiring any Workload to
-an OpenFeature provider... Feature 9's job, only where a workload reads a
-flag") -- not a bug, not partially built, just not exercised end-to-end
-anywhere in this repo yet.
+code to wire an SDK into. This is a real, deliberate seam: wiring an actual
+workload to an OpenFeature provider was scoped out of this project on
+purpose, left for a later feature-step, only where a workload actually
+reads a flag -- not a bug, not partially built, just not exercised
+end-to-end anywhere in this repo yet.
 
 ## 2. The API path (for scripting)
 
 For automation instead of clicking through the UI. Two different surfaces
 exist, confirmed live via an in-cluster `curl` against the `flagsmith-api`
 Service (the API is **not** Gateway-routed today -- the `flagsmith`
-HTTPRoute only forwards `/health` and `/`, per design.md's explicit
-"a Gateway-reachable `/api` is a Feature-9 concern, not built here").
+HTTPRoute only forwards `/health` and `/`; a Gateway-reachable `/api` path,
+which a browser-based OpenFeature client would need, was deliberately left
+for a later feature-step and isn't built here).
 
 ### Reaching the API at all
 
@@ -203,66 +204,22 @@ against `flagsmith-charts` `0.82.0` / app `2.238.0` specifically here.
 
 ## 3. This project's own Release Flag concept: design intent vs. reality
 
-`design.md`'s Specification, under **Release Flag**, describes a single
-project-level flag meant to gate the whole platform's "release" to an
-operator, decoupling continuous deploy from release:
+Early design work for this project floated a single project-level release
+flag: not a Flagsmith `Feature` object, but a git-level gate -- feature-steps
+would accumulate on a long-lived integration branch, the platform would stay
+unreleased until a final acceptance pass, and promoting that branch to
+`main` would be the flag itself flipping.
 
-- Feature-steps accumulate on a **long-lived integration branch**, each
-  landing and testable in isolation.
-- The platform is **not** "released" (the `main`-branch
-  `GETTING_STARTED.md` / `mise run up` path does not advertise a working
-  full platform) until the Closing Bell passes.
-- The flag itself is the **promotion of that branch to `main`** -- not a
-  Flagsmith `Feature` object, a git-level gate.
-- Where a half-built layer would otherwise be reachable, its ArgoCD
-  Application ships **dark** (excluded from `overlays/dev`'s root
-  kustomization until its own feature-step lands).
-- No individual feature-step needs its own flag; each ships dark
-  independently.
-- The Closing Bell runs against a build with the flag enabled.
-- The flag is **retired at project cleanup**: fold the integration branch
-  into `main`, remove any now-dead "not yet released" conditionals.
-
-**This was never built.** `report.md` (the long-loop end-of-run report,
-2026-07-09) records it plainly as "one real deviation from the written
-design, surfaced for the record, not papered over": every feature-step
-built directly on `main` throughout this project, every layer's ArgoCD
-Application went live and `Synced`/`Healthy` the moment it landed, nothing
-shipped dark, and there was never a separate integration branch. That was
-the operator's own explicit, repeated, real-time direction during the
-session, not a default the build assumed on its own -- but the design
-doc's Release Flag section was never reconciled with what actually
-happened. Concretely for this runbook: **there is no Flagsmith `Feature`
-object anywhere in this cluster gating platform release, and no mechanism
-reads one.** Nothing in `overlays/dev`'s root kustomization is
-conditionally included based on a flag value. The Release Flag is a
-documented design intent, not a live control.
-
-### What implementing it for real would look like
-
-If an operator wants to revisit this, the shape described in design.md
-implies something like:
-
-- A Flagsmith flag (e.g. `platform-released`, boolean) in the bootstrapped
-  `agrippa` project's environment(s).
-- Something that actually *reads* that flag and acts on it before ArgoCD
-  ever sees the result -- Flagsmith flags are runtime state in Postgres,
-  while `overlays/dev`'s root kustomization is static YAML in git that
-  ArgoCD reconciles declaratively. A flag value can't gate which
-  `resources:` entries kustomize includes by itself; some process (a CI
-  step, a small script an operator runs, or an ApplicationSet templating
-  off an external data source) would need to query the flag via the API
-  path in section 2 and conditionally write or prune the affected
-  Application/HTTPRoute entries from the overlay before it's committed --
-  or gate `sync-wave`/`syncPolicy.automated` on affected Applications some
-  other way.
-- Given section 1's finding that the admin bootstrap flow itself isn't
-  confirmed working yet, standing up any real automation against this
-  Flagsmith instance's API should start there: get a confirmed login and a
-  confirmed API token first.
-
-This is a real design gap worth a deliberate amend-or-accept pass (as
-`report.md` itself recommends), not something this runbook resolves.
+**This was never built.** Every feature-step here landed directly on
+`main` throughout this project, every layer's ArgoCD Application went live
+and `Synced`/`Healthy` the moment it landed, nothing shipped dark, and there
+was never a separate integration branch. Concretely for this runbook:
+**there is no Flagsmith `Feature` object anywhere in this cluster gating
+platform release, and no mechanism reads one.** Nothing in `overlays/dev`'s
+root kustomization is conditionally included based on a flag value. If
+you're troubleshooting Flagsmith day to day, this is a non-issue: every
+flag you'll find in this instance is an ordinary application-level flag
+(section 1), not a hidden platform-release switch.
 
 ## 4. Safety note: a flag flip is live runtime state, not a git change
 
