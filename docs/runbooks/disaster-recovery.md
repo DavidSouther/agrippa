@@ -27,7 +27,7 @@ Those two runbooks assume you know roughly what's wrong: a bad commit
   incrementally patched by hand for months. See section 4.
 
 If neither of those apply, whatever change you're diagnosing, `./rollback.md`
-or `./incident-response.md` will very probably get you there faster.
+or `./incident-response.md` will probably get you there faster.
 
 ## 2. The rebuild procedure
 
@@ -152,10 +152,10 @@ key). There is no drift to reconcile and nothing to reconstruct by hand,
 this is what GitOps parity buys you.
 
 What does **not** come back automatically is any runtime data that existed
-only in the old cluster's PVCs. That data splits into two categories with very
+only in the old cluster's PVCs. That data splits into two categories with
 different exposure, and the distinction matters before you tear anything down.
 
-Postgres row data now has a real automated backup and point-in-time recovery
+Postgres row data has a real automated backup and point-in-time recovery
 path. Keycloak users and sessions beyond the declaratively-imported realm,
 Flagsmith flag values set at runtime through the admin UI, Forgejo's metadata,
 and database rows in general are all captured by CloudNativePG's continuous WAL
@@ -165,7 +165,7 @@ there to recover from. See
 [`./backup-restore.md`](./backup-restore.md) sections 2 and 4 for how it is
 configured and how to restore a cluster from it.
 
-Two things still have no backup at all: Forgejo's git content (the
+Two things have no backup at all: Forgejo's git content (the
 `gitea-shared-storage` PVC, holding every commit, branch, blob, and LFS
 object, entirely separate from the Postgres metadata) and Valkey's cached
 state. Nothing backs either one up, so no rebuild, however clean, restores it.

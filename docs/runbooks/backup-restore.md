@@ -1,17 +1,16 @@
 # Backing up and restoring data
 
-You arrived here because you're worried about losing something on
-`agrippa-dev`, or you already have. Read the section that matches your
-situation. The short version: Postgres row data now has automated,
-near-zero-RPO backup and point-in-time recovery through CloudNativePG's
-native WAL archiving plus scheduled base backups to a dedicated MinIO. A few
-things still have no automated backup, and this document is explicit about
-which.
+You arrived here because you're worried about losing something on Agrippa,
+or you already have. Read the section that matches your situation. The short
+version: Postgres row data has automated, near-zero-RPO backup and
+point-in-time recovery through CloudNativePG's native WAL archiving plus
+scheduled base backups to a dedicated MinIO. A few things have no automated
+backup, and this document is explicit about which.
 
 ## The one fact that governs everything below
 
-`agrippa-dev` holds two very different kinds of state, and they have
-completely different exposure:
+Agrippa holds data with two kinds of state, with different disaster
+recovery exposure:
 
 - **Declarative state**: every manifest, chart pin, config value, and sealed
   credential that describes what should be running. This lives in git and
@@ -22,10 +21,10 @@ completely different exposure:
   it loses it, unless something backed it up first.
 
 A `git revert` or a full cluster rebuild restores the first kind perfectly.
-It does nothing at all for the second kind. That distinction still governs
-this whole document. What changed is that one large slice of the second kind,
-Postgres row data, now has a real automated backup path, described in section
-2. The rest of the second kind is enumerated in section 3.
+It does nothing at all for the second kind. That distinction governs this
+whole document. One large slice of the second kind, Postgres row data, has a
+real automated backup path, described in section 2. The rest of the second
+kind is enumerated in section 3.
 
 ---
 
@@ -118,7 +117,7 @@ bucket.
 
 ---
 
-## 3. What is still NOT backed up automatically
+## 3. What is NOT backed up automatically
 
 ### The MinIO instance's own durability
 
@@ -147,7 +146,7 @@ no-backup exposure with zero additional work required to create the gap.
 ### Forgejo git repository content
 
 Postgres holds Forgejo's *metadata* (users, issues, pull-request state,
-webhooks), and that metadata is now covered by section 2 like every other
+webhooks), and that metadata is covered by section 2 like every other
 database. Forgejo's actual git content, every commit, branch, blob, LFS
 object, and attachment, lives on a *separate* Forgejo PVC
 (`gitea-shared-storage`, namespace `forgejo`, 2Gi, `local-path`), entirely
@@ -240,12 +239,12 @@ namespace before a real cutover.
 
 ---
 
-## 5. Manual logical exports with `pg_dump` (complementary, still useful)
+## 5. Manual logical exports with `pg_dump` (complementary)
 
 The automated backup in section 2 is a *physical* backup: whole-cluster,
 byte-level, ideal for disaster recovery and PITR. It is not the right tool for
 "give me a portable SQL file of just the `flagsmith` database to load
-elsewhere," or "extract one table." For those, a logical `pg_dump` is still the
+elsewhere," or "extract one table." For those, a logical `pg_dump` is the
 answer, and it needs no extra setup.
 
 Point `kubectl` at the cluster and find the primary:
@@ -284,7 +283,7 @@ This Cluster does not set `enableSuperuserAccess`, so no `postgres-superuser`
 credential is exposed, and the only readable passwords are the four managed app
 roles plus the non-superuser `app` owner. A `pg_dumpall` with an app credential
 fails with `permission denied for table pg_authid`. This is expected, not a
-regression: for a whole-cluster consistent capture, use the physical backup in
+bug: for a whole-cluster consistent capture, use the physical backup in
 section 2, which is exactly the case it exists for. `pg_dump` per database
 remains the logical-export path.
 
@@ -323,9 +322,9 @@ Cluster and the consuming app closely afterward.
 
 ## 7. Forgejo and Flagsmith specifically
 
-### Forgejo: the git PVC is a separate, still-open gap
+### Forgejo: the git PVC is a separate, open gap
 
-Section 2 now covers Forgejo's Postgres metadata like any other database. It
+Section 2 covers Forgejo's Postgres metadata like any other database. It
 does *not* cover Forgejo's git content, which lives on the independent
 `gitea-shared-storage` PVC (namespace `forgejo`, 2Gi, `local-path`). No
 automated backup reaches that PVC. The most direct manual mitigation is a
@@ -352,7 +351,7 @@ about.
 | Bad Postgres rows / dropped table in `keycloak`/`forgejo`/`flagsmith`/`smoke` | Automated CNPG backup: bootstrap a new Cluster with `recovery` + `recoveryTarget.targetTime` to just before the damage (section 4). |
 | Lost the `postgres-1` PVC (node survives) | Automated CNPG backup restores from MinIO, as long as the `minio-backup` PVC / node survived (section 4). |
 | Need a portable SQL export of one database | `pg_dump` per database (section 5), restored per section 6. |
-| Need a whole-cluster consistent Postgres capture | The physical backup in section 2; `pg_dumpall` still doesn't work (no exposed superuser, section 5). |
-| Lost the `minio-backup` PVC / its node too | Backups on it are gone; off-cluster durability of MinIO is still deferred (section 3). |
-| Lost Forgejo git content (`gitea-shared-storage` PVC) | No automated path; manual filesystem copy only, still an open gap (section 7). |
+| Need a whole-cluster consistent Postgres capture | The physical backup in section 2; `pg_dumpall` doesn't work (no exposed superuser, section 5). |
+| Lost the `minio-backup` PVC / its node too | Backups on it are gone; off-cluster durability of MinIO is deferred (section 3). |
+| Lost Forgejo git content (`gitea-shared-storage` PVC) | No automated path; manual filesystem copy only, an open gap (section 7). |
 | Lost Valkey PVC | No backup; no real data there today (section 3). |
