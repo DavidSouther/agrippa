@@ -11,6 +11,22 @@ spec:
   storage:
     storageClass: local-path
     size: 1Gi
+  backup:
+    retentionPolicy: 7d
+    barmanObjectStore:
+      destinationPath: s3://postgres-backups/
+      endpointURL: http://minio-backup.storage.svc:9000
+      s3Credentials:
+        accessKeyId:
+          name: minio-backup
+          key: accessKeyId
+        secretAccessKey:
+          name: minio-backup
+          key: secretAccessKey
+      wal:
+        compression: gzip
+      data:
+        compression: gzip
   managed:
     roles:
       - name: smoke

@@ -6,5 +6,6 @@ resources:
   - ../../../secrets/dev/storage
   - minio/
   - postgres-cluster.yaml
+  - scheduled-backup.yaml
   - valkey/
   - smoke-database.yaml
