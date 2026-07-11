@@ -1,0 +1,14 @@
+apiVersion: k8s.keycloak.org/v2beta1
+kind: KeycloakRealmImport
+metadata:
+  name: agrippa
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  keycloakCRName: keycloak
+  realm:
+    id: agrippa
+    realm: agrippa
+    enabled: true
+    displayName: Agrippa

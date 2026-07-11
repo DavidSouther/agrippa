@@ -1,5 +1,5 @@
-# Wave 5: routes the Grafana dev host through the shared Gateway to the
-# Grafana Service. Plain HTTP backend, so no DestinationRule is needed here
+# Routes the Grafana dev host through the shared Gateway to the Grafana
+# Service. Plain HTTP backend, so no DestinationRule is needed here
 # (unlike ArgoCD's HTTPS backend; see core/overlays/dev/argocd-destinationrule.yaml).
 # `matches` is authored explicitly, matching the Gateway API CRD's own schema
 # default for an omitted rule (PathPrefix "/"), since an omitted `matches`

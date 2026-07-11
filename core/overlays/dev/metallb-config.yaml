@@ -1,6 +1,6 @@
-# Wave 0: metallb's IP pool and L2 advertisement. Range re-derived this
-# session against `docker network inspect k3d-agrippa-dev` (subnet
-# 172.18.0.0/16; in-use addresses .2/.3/.4 only) -- .200-.250 has no conflict.
+# metallb's IP pool and L2 advertisement. Range derived against `docker
+# network inspect k3d-agrippa-dev` (subnet 172.18.0.0/16; in-use addresses
+# .2/.3/.4 only) -- .200-.250 has no conflict.
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:
