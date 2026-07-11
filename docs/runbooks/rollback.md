@@ -1,11 +1,11 @@
 # Rolling back a bad change
 
-You arrived here because something on `agrippa-dev` broke after a change, and
+You arrived here because something on Agrippa broke after a change, and
 you want it un-broken. Read the next paragraph before you touch `kubectl`.
 
 ## The one fact that governs everything below
 
-`agrippa-dev` is GitOps-managed by ArgoCD. Every layer -- `root`, `core`,
+Agrippa is GitOps-managed by ArgoCD. Every layer -- `root`, `core`,
 `storage`, `platform`, `observability`, and `argocd` itself -- is one ArgoCD
 `Application`; `workloads` is two (`workloads-resume`, `workloads-trips`).
 Each is an ArgoCD `Application` with:
@@ -33,10 +33,10 @@ through all three sections below.
 
 ## 1. The correct rollback: revert the git commit
 
-This is the mechanism to reach for in the overwhelming majority of cases. It
-is both the fix and self-enforcing: once the revert lands on `origin/main`,
-ArgoCD's own `selfHeal` picks it up on its own, typically within its default
-polling interval (about 3 minutes), or immediately if you force a refresh.
+This is the mechanism to reach for in most cases. It is both the fix and
+self-enforcing: once the revert lands on `origin/main`, ArgoCD's own
+`selfHeal` picks it up on its own, typically within its default polling
+interval (about 3 minutes), or immediately if you force a refresh.
 
 ### Find the bad commit
 

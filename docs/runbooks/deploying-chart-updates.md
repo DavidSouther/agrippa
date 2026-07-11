@@ -51,7 +51,7 @@ the current pin and the target, looking specifically for:
 
 - Renamed, removed, or restructured `values.yaml` keys.
 - New defaults that turn on additional subcharts, replicas, or components
-  (see the callout below -- this bit the Mimir bump this session).
+  (see the callout below -- this bit the Mimir bump).
 - Any migration notes for persisted state (PVCs, CRDs, schema versions).
 
 Chart source, ArtifactHub, or (for OCI charts like Forgejo)
@@ -157,7 +157,7 @@ bats tests/<feature>.bats
 
 Follow [`./rollback.md`](./rollback.md).
 
-## 3. Real chart-upgrade surprises this session already hit
+## 3. Known chart-upgrade surprises
 
 These are the class of thing to watch for on any bump, not just "it might
 break":
@@ -181,9 +181,9 @@ break":
   `zoneAwareReplication.enabled: true` (three logical zones). With that
   on, a top-level `replicas: 1` doesn't mean one pod -- it renders three
   separate StatefulSets, one per zone, each carrying its own replica
-  count. Confirmed live this session. If a component's stated `replicas:`
-  value is supposed to be the literal pod count, check for a
-  `zoneAwareReplication`-shaped toggle and disable it explicitly.
+  count. If a component's stated `replicas:` value is supposed to be the
+  literal pod count, check for a `zoneAwareReplication`-shaped toggle and
+  disable it explicitly.
 
 - **`helm template` is what actually runs here, not `helm install`.**
   kustomize's `helmCharts:` inflation shells out to `helm template`, which
@@ -191,7 +191,7 @@ break":
   Jobs) as a permanent object instead of running it once and discarding
   it the way `helm install`/`helm test` would. ArgoCD then plain-applies
   whatever kustomize handed it, hook annotations and all -- it doesn't run
-  a hook lifecycle either. Two mitigations, both already in use across
+  a hook lifecycle either. Two mitigations, both in use across
   this repo's charts:
   - `skipTests: true` on the `helmCharts:` entry excludes the chart's own
     `helm.sh/hook: test` resources (Valkey's `valkey-test-auth-existing`

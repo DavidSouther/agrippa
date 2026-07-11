@@ -1,6 +1,6 @@
 # Testing a change to an application
 
-How to safely test a change to any component of `agrippa-dev` before and after
+How to safely test a change to any component of Agrippa before and after
 it lands. This is a solo-operator, single dev cluster with no staging
 environment. The safety net is local render-checking before push, a reviewed
 pull request, then a component's own bats probe after ArgoCD reconciles.
@@ -91,7 +91,7 @@ of each other). All of them sit under a self-managing `root` app-of-apps;
 alone silently enables ArgoCD's Structured Merge Diff, which mispredicts
 CRD-webhook-defaulted fields and leaves the resource permanently `OutOfSync`
 even when `spec` matches byte-for-byte (argoproj/argo-cd#22151). Every
-existing Application manifest under `apps/` already carries the fix,
+existing Application manifest under `apps/` carries the fix,
 `argocd.argoproj.io/compare-options: ServerSideDiff=true`, alongside
 `ServerSideApply=true`. This only bites when adding a brand new layer-level
 Application, not a normal component change inside an existing layer, but if
@@ -276,18 +276,17 @@ warm-up timing right after a fresh sync); it does not query them for live
 data. For actually confirming a datasource is returning data, not just
 registered, see `./interpreting-dashboards.md`.
 
-This gap is not theoretical. This session, Mimir's ingester ring came up
-with no explicit `replication_factor` in the chart values, so it fell back
-to Mimir's binary default of 3, impossible to satisfy against this
-feature-step's single ingester replica. Every `remote_write` from Alloy
-failed with "at least 2 live replicas required, could only find 1," visible
-only in the distributor's own logs, for roughly 13 hours before it was
-caught. `observability` reported Synced/Healthy the entire time. The
-datasource was registered in Grafana the entire time. Nothing about the
-GitOps or provisioning state signaled a problem; only an actual query
-against the Mimir datasource (or `mimirtool`/PromQL against a known metric)
-surfaced the silent write failure. Treat "Synced/Healthy" and "datasource
-provisioned" as necessary, never sufficient, for this layer.
+This gap is not theoretical. If Mimir's ingester ring comes up with no
+explicit `replication_factor` in the chart values, it falls back to Mimir's
+binary default of 3, which a single ingester replica cannot satisfy. Every
+`remote_write` from Alloy then fails with "at least 2 live replicas
+required, could only find 1," visible only in the distributor's own logs
+while `observability` still reports Synced/Healthy and the datasource stays
+registered in Grafana. Nothing about the GitOps or provisioning state
+signals the problem; only an actual query against the Mimir datasource (or
+`mimirtool`/PromQL against a known metric) surfaces the silent write
+failure. Treat "Synced/Healthy" and "datasource provisioned" as necessary,
+never sufficient, for this layer.
 
 ## Workloads (resume, trips static sites)
 
