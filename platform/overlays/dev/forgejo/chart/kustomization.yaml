@@ -1,63 +1,40 @@
-# Wave 0: the Forgejo chart, against the shared postgres Cluster's forgejo
-# database/role (both already live -- Step 2, wave -5) and the sealed
-# admin/db credentials (also Step 2).
+# Chart values for Forgejo, against the shared postgres Cluster's forgejo
+# database/role (forgejo-database.yaml) and the sealed admin/db credentials
+# (secrets/dev/platform/forgejo/).
 #
-# BUILD-TIME CORRECTION (research:public, live-verified): the design/plan's
-# placeholder OCI ref `code.forgejo.org/forgejo-helm/forgejo-helm` 404s --
-# the real chart path is `oci://code.forgejo.org/forgejo-helm/forgejo`
-# (confirmed via `helm show chart`). Pinned to 17.1.1 (appVersion 15.0.3),
-# the current stable release on that OCI registry at build time.
+# `code.forgejo.org/forgejo-helm/forgejo-helm` 404s -- the correct OCI chart
+# path is `oci://code.forgejo.org/forgejo-helm/forgejo`. Pinned to 17.1.1
+# (appVersion 15.0.3); do not float the tag.
 #
-# BUILD-TIME FINDING (live-verified via a standalone `kustomize build
-# --enable-helm` render): unlike Valkey, this chart's templates use the
-# bitnami-common `common.names.namespace` helper, which resolves to
-# `.Release.Namespace` and is written explicitly onto every object's
-# metadata.namespace -- so helmCharts[].namespace: forgejo (which sets
-# `.Release.Namespace` for the render) is sufficient on its own. The
-# kustomize#6058 namespace-stamp regression that hit Valkey does NOT
-# reproduce here; no scoped `patches:` workaround needed. ArgoCD's live
-# argocd-cm kustomize.buildOptions already carries `--enable-helm`
-# (alongside `--enable-alpha-plugins --enable-exec` for KSOPS), confirmed
-# live -- no repo-server config change needed.
+# The chart's `templates/tests/` hook renders a literal, permanent test Pod
+# (helm.sh/hook semantics ArgoCD doesn't understand, same as
+# storage/overlays/dev/valkey's kustomization.yaml) -- skipTests excludes
+# it. Unlike Valkey, this chart's templates use the bitnami-common
+# `common.names.namespace` helper, which writes `.Release.Namespace`
+# explicitly onto every object's metadata.namespace -- so
+# helmCharts[].namespace: forgejo is sufficient on its own, and Valkey's
+# kubernetes-sigs/kustomize#6058 `patches:` workaround is not needed here.
 #
-# BUILD-TIME FINDING (live-verified): the chart's `templates/tests/` hook
-# renders a literal, permanent test Pod the same way Valkey's did (helm
-# template semantics -- ArgoCD doesn't understand helm.sh/hook and would
-# otherwise plain-apply it). skipTests excludes it, mirroring Valkey.
+# `gitea.additionalConfigFromEnvs` entries are spliced directly into the
+# init container's `env:` list (templates/gitea/deployment.yaml), so each
+# entry must already be a well-formed core/v1 EnvVar object -- `name` +
+# `valueFrom.secretKeyRef`, per the chart's own README example -- not an
+# `envName`/`secretKeyRef` shorthand (a Gitea-chart-ism that does not exist
+# in this schema; ArgoCD's ServerSideApply rejects that shape with "field
+# not declared in schema" on the initContainer's env entry).
+# FORGEJO__DATABASE__PASSWD follows Forgejo's own FORGEJO__<SECTION>__<KEY>
+# convention, not Gitea's legacy GITEA__ prefix.
 #
-# BUILD-TIME FINDING on `gitea.additionalConfigFromEnvs` (two parts, one
-# decision): the env-var name FORGEJO__DATABASE__PASSWD is confirmed
-# correct (research:public, forgejo.org env-to-ini docs -- Forgejo's own
-# FORGEJO__<SECTION>__<KEY> convention, not Gitea's legacy GITEA__ prefix;
-# matches the design's assumption). Its wrapping SHAPE needed a correction,
-# found the hard way -- a real live ArgoCD ServerSideApply failure, not
-# caught by `kustomize build`/`helm template` rendering cleanly:
-# `additionalConfigFromEnvs` entries are spliced **directly** into the init
-# container's `env:` list (templates/gitea/deployment.yaml), so each entry
-# must already be a well-formed core/v1 EnvVar object -- `name` +
-# `valueFrom.secretKeyRef`, exactly the chart's own README example -- NOT
-# the design/plan's assumed `envName`/`secretKeyRef` shorthand (a
-# Gitea-chart-ism that does not exist in this schema). `helm
-# template`/kustomize's local render doesn't validate against the K8s
-# OpenAPI schema, so this only surfaced live: ArgoCD's ServerSideApply
-# (Step 0's seam) rejected the Deployment with "field not declared in
-# schema" on `initContainers[name="init-app-ini"].env[name=""].envName`.
-# Corrected to `name`/`valueFrom.secretKeyRef` below.
-#
-# BUILD-TIME FINDING (live-verified via chart template inspection): the
-# admin existingSecret's expected keys are literally `username`/`password`
+# admin.existingSecret's expected keys are literally `username`/`password`
 # (templates/gitea/deployment.yaml's GITEA_ADMIN_USERNAME/PASSWORD
-# secretKeyRefs) -- matches admin.enc.yaml's shape exactly (design's Open
-# Artifact Decision, confirmed correct, no correction needed).
+# secretKeyRefs), matching admin.enc.yaml's shape.
 #
-# Main-container `resources:` (top-level Values key, confirmed via template
-# inspection) defaults to `{}` (unset) -- scoped to a dev-appropriate
-# footprint proactively here (Auth's Keycloak-operator precedent), rather
-# than waiting to hit a scheduling failure: the node has ample headroom
-# (42% memory / 33% cpu allocated as of this build), but an unbounded
-# request-less container is still a noisy-neighbor risk on a single-node
-# dev cluster carrying Istio, cert-manager, metallb, CNPG, Valkey, Keycloak,
-# and the full LGTM stack.
+# Main-container `resources:` defaults to `{}` (unset) in the chart -- an
+# unbounded request-less container is a noisy-neighbor risk on a
+# single-node dev cluster running Istio, cert-manager, metallb, CNPG,
+# Valkey, Keycloak, and the full LGTM stack, so it's scoped here to a
+# dev-appropriate footprint proactively, mirroring Keycloak's own dev-sized
+# resources.requests.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:

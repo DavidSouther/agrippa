@@ -1,11 +1,10 @@
-# Wave 0: routes the git dev host through the shared Gateway to
-# forgejo-http. Plain-HTTP backend -- service.http.type defaults to
-# ClusterIP on port 3000 (chart default), and Forgejo's own server.PROTOCOL
-# defaults to http, so no DestinationRule re-origination is needed (the
-# argocd-style HTTPS-backend case does not apply here).
-# `matches` authored explicitly -- Networking's own live-hit trap (an
-# omitted `matches:` left `core` permanently OutOfSync); avoided here by
-# design fiat, same as argocd-httproute.yaml/keycloak-httproute.yaml.
+# Routes the git dev host through the shared Gateway to forgejo-http.
+# Plain-HTTP backend -- service.http.type defaults to ClusterIP on port
+# 3000 (chart default), and Forgejo's own server.PROTOCOL defaults to
+# http, so no DestinationRule re-origination is needed (the argocd-style
+# HTTPS-backend case does not apply here). `matches` is authored
+# explicitly; see observability/overlays/dev/grafana-httproute.yaml:4-6 for
+# why an omitted `matches:` is unsafe under ServerSideDiff.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:

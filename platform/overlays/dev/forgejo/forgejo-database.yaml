@@ -1,13 +1,11 @@
-# Wave -5: the CNPG Database CR for the forgejo database. NOTE
-# metadata.namespace: storage -- CNPG's Database.spec.cluster is a
-# same-namespace-only LocalObjectReference; this file lives in this
-# feature's tree but the object lands in `storage`, exactly as
-# keycloak-database.yaml's own precedent.
-# NOTE wave -5 (not 5): the forgejo database must exist before the wave-0
-# chart's Deployment ever connects to it -- see design.md's "Correction by
-# the coordinator (2026-07-09)" and plan.md's Resolved item 4: Forgejo
-# crash-loops (never reaches Healthy) if pointed at a database that does not
-# yet exist, which would otherwise deadlock the ArgoCD sync-wave ordering.
+# The CNPG Database CR for the forgejo database. metadata.namespace: storage
+# -- CNPG's Database.spec.cluster is a same-namespace-only
+# LocalObjectReference (cloudnative-pg/cloudnative-pg#6043); this file lives
+# in this feature's tree but the object lands in `storage`, exactly as
+# keycloak-database.yaml's own precedent. Must sync before the chart's
+# Forgejo Deployment: the forgejo database has to exist before that
+# Deployment's pod tries to connect, or its startup crash-loop blocks
+# ArgoCD from ever reaching a Healthy sync.
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
 metadata:
