@@ -1,6 +1,6 @@
-# Wave 5: routes the Keycloak dev host through the shared Gateway to
-# keycloak-service. Plain-HTTP backend -- no DestinationRule, since
-# spec.http.httpEnabled: true (the Keycloak CR) serves HTTP internally.
+# Routes the Keycloak dev host through the shared Gateway to keycloak-service.
+# Plain-HTTP backend -- no DestinationRule, since spec.http.httpEnabled: true
+# (the Keycloak CR) serves HTTP internally.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:

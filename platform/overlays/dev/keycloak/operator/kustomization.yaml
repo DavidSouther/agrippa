@@ -1,5 +1,5 @@
-# Wave -10: the Keycloak Operator + its four CRDs, in the new `keycloak`
-# namespace. `namespace: keycloak` is safe here -- only Operator resources
+# The Keycloak Operator + its four CRDs, in the new `keycloak` namespace.
+# `namespace: keycloak` is safe here -- only Operator resources
 # live in this sub-kustomization; the four CRDs and the Namespace itself are
 # cluster-scoped, so the namespace transformer skips them.
 #

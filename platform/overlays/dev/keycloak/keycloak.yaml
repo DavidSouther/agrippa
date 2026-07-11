@@ -1,6 +1,6 @@
-# Wave 0: the Keycloak CR, wired to the shared postgres Cluster over its
-# plain-HTTP listener. Runs at wave 0, after the wave -5 keycloak-database.yaml
-# Database CR -- the database must already exist when this CR's pod connects.
+# The Keycloak CR, wired to the shared postgres Cluster over its plain-HTTP
+# listener. Syncs after keycloak-database.yaml's Database CR -- the database
+# must already exist when this CR's pod connects.
 apiVersion: k8s.keycloak.org/v2beta1
 kind: Keycloak
 metadata:

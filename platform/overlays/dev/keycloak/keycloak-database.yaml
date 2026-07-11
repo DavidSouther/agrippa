@@ -1,12 +1,10 @@
-# Wave -5: the CNPG Database CR for the keycloak database. NOTE
-# metadata.namespace: storage -- CNPG's Database.spec.cluster is a
-# same-namespace-only LocalObjectReference (issue #6043); this file lives in
-# this feature's tree but the object lands in `storage`, exactly as core's
-# Certificate/Gateway land in istio-ingress.
-# NOTE wave -5, unlike storage's wave-5 smoke-database.yaml: the keycloak
-# database must exist before the wave-0 Keycloak CR's pod tries to connect
-# to it, or Keycloak's startup crash-loop blocks ArgoCD from ever reaching
-# a Healthy sync and advancing past this wave.
+# The CNPG Database CR for the keycloak database. metadata.namespace: storage
+# -- CNPG's Database.spec.cluster is a same-namespace-only LocalObjectReference
+# (issue #6043); this file lives in this feature's tree but the object lands
+# in `storage`, exactly as core's Certificate/Gateway land in istio-ingress.
+# Must sync before keycloak.yaml's Keycloak CR: the database has to exist
+# before that CR's pod tries to connect, or its startup crash-loop blocks
+# ArgoCD from ever reaching a Healthy sync.
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
 metadata:
