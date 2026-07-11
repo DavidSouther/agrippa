@@ -31,8 +31,9 @@ Postgres row data, now has a real automated backup path, described in section
 
 ## 1. What IS backed up: declarative state, in git
 
-Every layer (`core`, `storage`, `platform`, `observability`, `workloads`) is
-an ArgoCD `Application` synced from `origin/main`, with sealed credentials
+Every layer (`core`, `storage`, `platform`, `observability`) is an ArgoCD
+`Application`, and `workloads` is two (`workloads-resume`, `workloads-trips`)
+synced from `origin/main`, with sealed credentials
 committed as sops-encrypted `Secret` manifests under `secrets/`. That
 includes:
 

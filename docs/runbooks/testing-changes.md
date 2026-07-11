@@ -83,8 +83,9 @@ acceptance probe.
 
 Sync-wave order, so a lower layer's change should settle before a higher one
 that depends on it: `core` (0) -> `storage` (1) -> `platform` (2) ->
-`observability` (3) -> `workloads` (4). All of them sit under a self-managing
-`root` app-of-apps; `argocd` itself is also a self-managed Application.
+`observability` (3) -> `workloads-resume`/`workloads-trips` (4, independent
+of each other). All of them sit under a self-managing `root` app-of-apps;
+`argocd` itself is also a self-managed Application.
 
 **New layer-level Application gotcha.** `syncOptions: [ServerSideApply=true]`
 alone silently enables ArgoCD's Structured Merge Diff, which mispredicts
@@ -157,7 +158,7 @@ Application must actually be registered, not just present in git.
 ```bash
 mise run bootstrap   # idempotent; requires an unlocked Bitwarden session
 kubectl -n argocd get application root -o jsonpath='{.status.sync.status} {.status.health.status}{"\n"}'
-for layer in core storage platform observability workloads; do
+for layer in core storage platform observability workloads-resume workloads-trips; do
   kubectl -n argocd get application "$layer" >/dev/null && echo "$layer: registered"
 done
 bats tests/gitops.bats

@@ -65,8 +65,8 @@ kubectl -n <ns> logs <pod>
 ```
 
 `<ns>` is the app's namespace (`forgejo`, `flagsmith`, `keycloak`,
-`observability`, `workloads`, etc.); find it from the failing hostname if
-you don't already know it.
+`observability`, `resume`, `trips`, etc.); find it from the failing hostname
+if you don't already know it.
 
 ### Likely causes, ranked
 

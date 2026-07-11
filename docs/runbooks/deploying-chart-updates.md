@@ -144,7 +144,8 @@ kubectl -n argocd get applications \
 ```
 
 `<layer-name>` is one of `core`, `storage`, `platform`, `observability`,
-`workloads` -- whichever owns the chart you bumped.
+`workloads-resume`, or `workloads-trips` -- whichever owns the chart you
+bumped.
 
 ### Step 7: run that component's bats feature test
 

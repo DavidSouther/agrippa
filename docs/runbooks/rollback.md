@@ -6,8 +6,9 @@ you want it un-broken. Read the next paragraph before you touch `kubectl`.
 ## The one fact that governs everything below
 
 `agrippa-dev` is GitOps-managed by ArgoCD. Every layer -- `root`, `core`,
-`storage`, `platform`, `observability`, `workloads`, and `argocd` itself -- is
-an ArgoCD `Application` with:
+`storage`, `platform`, `observability`, and `argocd` itself -- is one ArgoCD
+`Application`; `workloads` is two (`workloads-resume`, `workloads-trips`).
+Each is an ArgoCD `Application` with:
 
 ```yaml
 syncPolicy:
@@ -107,7 +108,8 @@ kubectl -n argocd annotate application <layer> \
 ```
 
 `<layer>` is one of `core`, `storage`, `platform`, `observability`,
-`workloads`, `root`, or `argocd`. Watch it come back to `Synced`/`Healthy`:
+`workloads-resume`, `workloads-trips`, `root`, or `argocd`. Watch it come
+back to `Synced`/`Healthy`:
 
 ```bash
 kubectl -n argocd get application <layer> \
@@ -151,8 +153,8 @@ argocd app rollback <app-name> <history-id>
 ```
 
 `<app-name>` is the same layer name as above (`core`, `storage`, `platform`,
-`observability`, `workloads`). If the CLI isn't installed, log in against a
-port-forward:
+`observability`, `workloads-resume`, `workloads-trips`). If the CLI isn't
+installed, log in against a port-forward:
 
 ```bash
 kubectl -n argocd port-forward svc/argocd-server 8080:443 &

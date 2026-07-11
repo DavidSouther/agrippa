@@ -38,8 +38,9 @@ curl -sk https://trips.davidsouther.com.127.0.0.1.nip.io/    # trips
 
 ## ArgoCD: the source of truth for what's running
 
-Every layer (`core`, `storage`, `platform`, `observability`, `workloads`) is
-one ArgoCD `Application`, all managed by a self-syncing `root` app-of-apps.
+Every layer (`core`, `storage`, `platform`, `observability`) is one ArgoCD
+`Application`; `workloads` is two (`workloads-resume`, `workloads-trips`).
+All are managed by a self-syncing `root` app-of-apps.
 
 ```bash
 # One-line health check for the whole platform
