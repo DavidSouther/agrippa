@@ -6,8 +6,7 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "3"
-    # See apps/core.yaml:9-14's compare-options comment for the general
-    # SMD-mispredicts/ServerSideDiff-fixes-it rationale (argoproj/argo-cd#22151).
+    # See apps/core.yaml:9-14 and argoproj/argo-cd#22151
     argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: default
@@ -22,8 +21,7 @@ spec:
     automated:
       prune: true
       selfHeal: true
-    # See apps/core.yaml:29-35's syncOptions comment for the general
-    # ServerSideApply/SkipDryRunOnMissingResource rationale.
+    # See apps/core.yaml:29-35 for syncOptions reasoning
     syncOptions:
       - ServerSideApply=true
       - SkipDryRunOnMissingResource=true

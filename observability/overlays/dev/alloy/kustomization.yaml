@@ -1,19 +1,9 @@
-# Wave 5: Alloy DaemonSet, self-discovering the cluster and forwarding
-# metrics->Mimir, logs->Loki, traces->Tempo. Chart NOT moved off
-# grafana.github.io/helm-charts.
+# Alloy DaemonSet forwarding metrics to Mimir, logs to Loki, and traces to Tempo
 #
-# controller.type: daemonset is already the chart's own default; kept
-# implicit. The River/Flow pipeline config below is the chart's own primary
-# configuration surface (alloy.configMap.content, empty by default) --
-# three independent discovery->forward pipelines:
-#   - metrics: discovery.kubernetes (role=pod) -> prometheus.scrape ->
-#     prometheus.remote_write to Mimir's gateway push endpoint.
-#   - logs: the same discovery.kubernetes target set -> loki.source.kubernetes
-#     -> loki.write to Loki's singleBinary Service push endpoint (Loki's own
-#     gateway is disabled, so this goes straight to "loki":3100).
-#   - traces: otelcol.receiver.otlp (grpc+http) -> otelcol.exporter.otlp to
-#     Tempo's OTLP gRPC ingest port (4317), TLS disabled (in-cluster plain
-#     gRPC, matching Tempo's own receiver default).
+# three independent pipelines:
+#   - metrics: discovery.kubernetes (role=pod) -> prometheus.scrape -> prometheus.remote_write
+#   - logs: discovery.kubernetes (role=pod) -> loki.source.kubernetes -> loki.write
+#   - traces: otelcol.receiver.otlp (grpc+http) -> otelcol.exporter.otlp -> Tempo's OTLP gRPC ingest port (4317)
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:

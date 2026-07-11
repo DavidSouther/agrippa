@@ -1,41 +1,4 @@
-# Wave 5: Grafana (SQLite + local-path PVC, explicit admin/admin dev
-# credential, three provisioned datasources). Chart moved to
-# grafana-community.github.io/helm-charts.
-#
-# adminUser/adminPassword: the chart's own unset default generates a random
-# 40-char password via the Secret it creates from these two values
-# (admin.existingSecret is empty by default, so the chart itself owns
-# admin-credential generation) -- set explicitly here, the deliberate
-# exception to the sops-sealing discipline for a local dev credential that
-# must never be valid in production.
-#
-# persistence.enabled defaults to false (ephemeral SQLite); enabled here with
-# an explicit local-path storageClassName. deploymentStrategy defaults to
-# RollingUpdate, which would surge a second pod before terminating the
-# first; on a single-node cluster that means two Grafana pods briefly
-# mounting the same ReadWriteOnce local-path PVC and racing for the sqlite
-# file. Forced to Recreate so the old pod (and its mount) is gone before the
-# new one starts.
-#
-# The top-level `datasources:` key (a `datasources.yaml` sub-key) is the
-# chart's own primary, sidecar-free provisioning path: `_pod.tpl` mounts each
-# key under `datasources:` directly from the chart's own ConfigMap at
-# /etc/grafana/provisioning/datasources/, so sidecar.datasources.enabled is
-# not required.
-#
-# Datasource URLs:
-#   - Loki: Service "loki" (gateway.enabled: false upstream, so this is the
-#     singleBinary Service directly), port 3100 (loki.server.http_listen_port).
-#   - Mimir: Service "mimir-gateway" (mimir.gateway.service.name helper), the
-#     chart's own nginx gateway, which also ensures X-Scope-OrgID defaults to
-#     the no-auth tenant for every request -- required since going straight to
-#     a backend component would skip that. Port 80 (gateway.service.port
-#     default), path prefix /prometheus (mimir.prometheusHttpPrefix default).
-#   - Tempo: Service "tempo", port 3200 (tempo.tcp port from _ports.tpl).
-#
-# Grafana's own Service defaults to port 80 with targetPort 3000; service.port
-# is set to 3000 explicitly so it matches the Grafana HTTPRoute's
-# backendRefs port instead of diverging from it.
+# Grafana on SQLite + local-path PVC with explicit admin/admin dev credential
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
@@ -47,15 +10,19 @@ helmCharts:
     releaseName: grafana
     namespace: observability
     valuesInline:
+      # Dev only!
       adminUser: admin
       adminPassword: admin
       service:
+        # Coordinate with Grafana HTTPRoute
         port: 3000
       persistence:
         enabled: true
         type: pvc
         storageClassName: local-path
       deploymentStrategy:
+        # default is RollingUpdate. On a single-node cluster two Grafana pods
+        # would briefly mount the same ReadWriteOnce PVC
         type: Recreate
       datasources:
         datasources.yaml:

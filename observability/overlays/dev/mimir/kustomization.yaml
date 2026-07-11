@@ -1,44 +1,10 @@
-# Wave 0: mimir-distributed at one replica per component. Chart NOT moved off
-# grafana.github.io/helm-charts -- version 6.1.0 is the newest stable tag
-# (the repo's newest entries are an unstable "weekly" prerelease channel).
+# mimir-distributed at one replica per component
 #
 # Chart 6.x defaults to the newer Kafka-backed "ingest storage" architecture
 # (kafka.enabled: true), adding a whole extra Kafka broker plus an ingester
 # zone-awareness requirement. The chart ships an official
 # classic-architecture.yaml escape hatch back to the pre-6.x direct
-# distributor->ingester path with no Kafka; inlined below rather than
-# referenced, since helmCharts: valuesInline can't layer an extra values
-# file. This keeps the deployment to a single-node, minimal-footprint shape.
-#
-# classic-architecture.yaml sets ingester.push_grpc_method_enabled: null,
-# relying on `helm install`/`helm template`'s own values-merge to drop the
-# key so Mimir's ingester falls back to its own default (true). kustomize's
-# helmCharts: inflation does not preserve that null the same way -- verified
-# by rendering this exact valuesInline through both `kustomize build
-# --enable-helm` and plain `helm template`: kustomize resolves the key back
-# to the base config's hardcoded `false` ("Disallow Push gRPC API; everything
-# comes through Kafka in the ingest storage architecture"), which would
-# reject every distributor->ingester write in this Kafka-less classic setup.
-# Set explicitly to `true` below instead of `null` so it survives kustomize's
-# merge. The other two classic-architecture.yaml nulls (distributor's
-# remote_timeout, ingest_storage's kafka.* fields) hit the same kustomize
-# limitation, but are inert either way once ingest_storage.enabled: false
-# takes effect (a concrete override, unaffected by this caveat) -- omitted
-# below rather than kept as no-op nulls.
-#
-# ingester and store_gateway both default zoneAwareReplication.enabled: true
-# (3 logical zones, sharding a component's total replicas across all three,
-# so the chart's own default replicas render THREE ingester StatefulSets, not
-# one). Disabled here for both, so their top-level `replicas: 1` is the
-# single StatefulSet's actual pod count.
-#
-# alertmanager, distributor, overrides_exporter, ruler, query_frontend,
-# compactor, and the gateway already default to 1 replica; only ingester,
-# querier, and query_scheduler default above 1 (3, 2, 2 respectively) and are
-# overridden below. The chunks/index/metadata/results memcached-based caches
-# all default disabled (enabled: false) and are left untouched. The bundled
-# minio (chart default) needs its own persistence.storageClass set
-# explicitly, same as every other stateful component's PVC.
+# distributor->ingester path with no Kafka.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
@@ -49,14 +15,6 @@ helmCharts:
     version: 6.1.0
     releaseName: mimir
     namespace: observability
-    # kustomize's helmCharts: inflation renders every helm.sh/hook-annotated
-    # resource as a literal, permanent object -- ArgoCD doesn't run `helm
-    # test`/`helm install` hook lifecycles (the same caveat Storage's own
-    # Valkey hit). skipTests excludes the chart's own helm.sh/hook: test Job
-    # (mimir-smoke-test). The bundled minio subchart's own post-install/
-    # post-upgrade bucket-creation Job (mimir-minio-post-job) isn't a `test`
-    # hook, so skipTests doesn't touch it; deleted explicitly below via the
-    # patches: $patch delete idiom, scoped to this sub-kustomization only.
     skipTests: true
     valuesInline:
       # classic-architecture.yaml, inlined (see comment above)
@@ -92,52 +50,14 @@ helmCharts:
       minio:
         persistence:
           storageClass: local-path
-      # rollout_operator.enabled defaults to true (a whole extra Deployment
-      # plus mutating/validating admission webhooks for coordinated
-      # zone-by-zone rollout/downscale). With zoneAwareReplication disabled
-      # above, its webhooks still intercept every StatefulSet create/update in
-      # the observability namespace (namespaceSelector-scoped, not
-      # conditioned on the zone-aware annotations it would otherwise
-      # coordinate) -- and while the operator pod itself was still becoming
-      # Ready, ArgoCD's ServerSideDiff dry-run failed outright ("no endpoints
-      # available for service mimir-rollout-operator"), blocking comparison
-      # for the whole Application. Zone-by-zone coordination is meaningless
-      # without zone-aware replication, so the whole subchart (Chart.yaml's
-      # `condition: rollout_operator.enabled`) is disabled rather than
-      # patching around its webhook.
+      # Zone-by-zone coordination is meaningless without zone-aware replication
       rollout_operator:
         enabled: false
-# The bundled minio subchart's own generic post-install/post-upgrade Job
-# (buckets/users/policies/customCommands/svcaccts) -- not a `helm.sh/hook:
-# test` hook, so skipTests above doesn't remove it. helm template semantics
-# render it as a literal, permanent Job (same caveat as the smoke-test hook
-# above). It runs the identical /config/initialize script against the
-# identical mimir-minio ConfigMap/Secret as the separate, non-hook
-# "mimir-make-minio-buckets-5.4.0" Job the mimir-distributed chart itself
-# already authors (driven by the same minio.buckets values) -- the two Jobs
-# create the same two buckets redundantly. Deleted here, scoped to this
-# sub-kustomization only; the non-hook Job (which ArgoCD's plain-apply
-# lifecycle handles correctly, unlike a helm-hook-flavored one with a
-# hook-succeeded delete policy) is left to do the actual bucket creation.
-#
-# Workaround for the kustomize 5.8.0+ regression (kubernetes-sigs/
-# kustomize#6058), the same root cause as Storage's own Valkey fix
-# (storage/overlays/dev/valkey/kustomization.yaml): the top-level
-# `namespace:` transformer doesn't stamp metadata.namespace onto resources
-# generated by helmCharts: inflation when the chart's own templates don't
-# hardcode {{ .Release.Namespace }}. The bundled minio subchart's templates
-# don't, so its first sync landed every minio object (ConfigMap/Secret/
-# Service x2/PVC/Deployment, all labeled app: minio, plus the labelless
-# minio-sa ServiceAccount) in `argocd`, not `observability` -- and, starved
-# of a real mimir-minio Service to resolve, every other Mimir component that
-# talks to object storage crash-looped on DNS lookup failure. The rest of
-# mimir-distributed's own templates DO hardcode the namespace, so the patch
-# is scoped to only the minio-labeled resources and the one unlabeled
-# ServiceAccount, not the whole sub-kustomization.
 patches:
   - target:
       kind: Job
       name: mimir-minio-post-job
+    # Unnecessary, handled by the ArgoCD deployment jobs
     patch: |-
       $patch: delete
       apiVersion: batch/v1
