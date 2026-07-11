@@ -1,0 +1,38 @@
+# imagePullPolicy: Never -- run 'mise run workloads:build' against this cluster first, or this sits in ErrImageNeverPull.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resume
+  namespace: resume
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: resume
+  template:
+    metadata:
+      labels:
+        app: resume
+    spec:
+      containers:
+        - name: resume
+          image: resume:dev
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 80

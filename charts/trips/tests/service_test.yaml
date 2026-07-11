@@ -1,0 +1,26 @@
+suite: trips service
+templates:
+  - service.yaml
+tests:
+  - it: targets the values-driven port (default 80)
+    asserts:
+      - equal:
+          path: spec.ports[0].port
+          value: 80
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 80
+      - equal:
+          path: spec.type
+          value: ClusterIP
+
+  - it: targets a values-driven non-default port
+    set:
+      service.port: 8080
+    asserts:
+      - equal:
+          path: spec.ports[0].port
+          value: 8080
+      - equal:
+          path: spec.ports[0].targetPort
+          value: 8080

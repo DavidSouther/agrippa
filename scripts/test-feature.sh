@@ -50,7 +50,7 @@ probe_suites=()
 for f in tests/*.bats; do
   [ -e "$f" ] || continue
   case "$(basename "$f")" in
-    agrippa.bats|harness.bats|preflight.bats|cluster-core.bats|gitops.bats|networking.bats|storage.bats|rotate-keys.bats) continue ;;
+    agrippa.bats|harness.bats|preflight.bats|cluster-core.bats|gitops.bats|networking.bats|storage.bats|git-hosting.bats|auth.bats|observability.bats|feature-flags.bats|workloads.bats|rotate-keys.bats) continue ;;
   esac
   probe_suites+=("$f")
 done

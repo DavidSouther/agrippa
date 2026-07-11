@@ -1,0 +1,25 @@
+suite: trips httproute
+templates:
+  - httproute.yaml
+tests:
+  - it: "carries an explicit matches: and the values-driven hostname"
+    asserts:
+      - equal:
+          path: spec.hostnames[0]
+          value: trips.davidsouther.com.127.0.0.1.nip.io
+      - exists:
+          path: spec.rules[0].matches
+      - equal:
+          path: spec.rules[0].matches[0].path.type
+          value: PathPrefix
+      - equal:
+          path: spec.rules[0].backendRefs[0].name
+          value: trips
+
+  - it: renders a values-driven hostname
+    set:
+      hostname: example.127.0.0.1.nip.io
+    asserts:
+      - equal:
+          path: spec.hostnames[0]
+          value: example.127.0.0.1.nip.io

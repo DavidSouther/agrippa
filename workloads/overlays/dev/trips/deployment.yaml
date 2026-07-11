@@ -1,0 +1,38 @@
+# imagePullPolicy: Never -- run 'mise run workloads:build' against this cluster first, or this sits in ErrImageNeverPull.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trips
+  namespace: trips
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trips
+  template:
+    metadata:
+      labels:
+        app: trips
+    spec:
+      containers:
+        - name: trips
+          image: trips:dev
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80

@@ -1,0 +1,26 @@
+# Hand-kept in sync with workloads/overlays/dev/resume/*.yaml -- not generated from it.
+image:
+  repository: resume
+  tag: dev
+  pullPolicy: Never
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 32Mi
+  limits:
+    memory: 128Mi
+
+hostname: davidsouther.com.127.0.0.1.nip.io
+
+healthz: true
+
+service:
+  port: 80
+
+gateway:
+  name: agrippa-gateway
+  namespace: istio-ingress
+  sectionName: https

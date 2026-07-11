@@ -35,6 +35,10 @@ run = "k3d cluster delete agrippa-dev"
 description = "Create the sops-age trust root, install a KSOPS-enabled ArgoCD, apply the root app-of-apps once"
 file = "scripts/bootstrap.sh"
 
+[tasks."workloads:build"]
+description = "Build resume:dev and trips:dev from the workloads/{resume,trips} git submodules and import both into the k3d node's containerd"
+file = "scripts/workloads-build.sh"
+
 [tasks."rotate-keys"]
 description = "Rotate an environment's age keypair: store a fresh identity in Bitwarden, archive (not delete) the old one, update .sops.yaml, and re-encrypt any already-committed secrets under the new key (never touches disk)"
 file = "scripts/rotate-keys.sh"

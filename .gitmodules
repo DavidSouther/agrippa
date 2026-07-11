@@ -1,0 +1,6 @@
+[submodule "workloads/resume"]
+	path = workloads/resume
+	url = https://github.com/davidsouther/resume.git
+[submodule "workloads/trips"]
+	path = workloads/trips
+	url = https://github.com/davidsouther/trips.git
