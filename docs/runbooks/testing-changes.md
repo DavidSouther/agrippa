@@ -19,7 +19,8 @@ covers the test-a-change loop.
 ## The generic pattern
 
 Every component follows the same loop: edit, render-check, statically test,
-push, watch ArgoCD reconcile, run the acceptance probe.
+push a feature branch, open a PR, merge, watch ArgoCD reconcile, run the
+acceptance probe.
 
 1. Edit files under `<layer>/overlays/dev/<component>/`.
 
@@ -55,7 +56,8 @@ push, watch ArgoCD reconcile, run the acceptance probe.
    ```
 
    ArgoCD only reconciles the change once the pull request is reviewed and
-   merged into `main`.
+   merged into `main`. Merge the reviewed pull request into `main` before
+   moving on to step 5.
 
 5. Watch ArgoCD reconcile the layer:
 
@@ -88,7 +90,7 @@ that depends on it: `core` (0) -> `storage` (1) -> `platform` (2) ->
 alone silently enables ArgoCD's Structured Merge Diff, which mispredicts
 CRD-webhook-defaulted fields and leaves the resource permanently `OutOfSync`
 even when `spec` matches byte-for-byte (argoproj/argo-cd#22151). Every
-existing `apps/<layer>.yaml` already carries the fix,
+existing Application manifest under `apps/` already carries the fix,
 `argocd.argoproj.io/compare-options: ServerSideDiff=true`, alongside
 `ServerSideApply=true`. This only bites when adding a brand new layer-level
 Application, not a normal component change inside an existing layer, but if
@@ -301,8 +303,8 @@ and import *before* pushing any manifest change that references a new tag:
 mise run workloads:build   # docker build + k3d image import for both resume:dev and trips:dev
 ```
 
-Then follow the generic pattern (render-check, `test:static`, push, watch
-ArgoCD) for the manifest change itself.
+Then follow the generic pattern (render-check, `test:static`, push, open a
+PR, merge, watch ArgoCD) for the manifest change itself.
 
 Verified working is not "pod is Running." It's real rendered content coming
 back for each site, not just an nginx 200:
@@ -318,7 +320,7 @@ If a Deployment change went out but the site still serves old content,
 suspect a stale image (forgot `mise run workloads:build`, or the Deployment
 still points at a cached tag) before suspecting the Gateway or route.
 
-## If a test fails after you push
+## If a test fails after it merges
 
 Since every merge to `main` reconciles onto the only cluster this platform
 has, with no staging environment to catch a bad change first, a failing

@@ -116,8 +116,8 @@ kubectl -n argocd get application <layer> \
 
 ### Worked precedent from this repo
 
-Commit `463a33f` (`fix(otel): set Mimir's ingester ring replication_factor to
-1`) fixed a live Mimir misconfiguration by editing
+The commit `fix(otel): set Mimir's ingester ring replication_factor to 1`
+fixed a live Mimir misconfiguration by editing
 `observability/overlays/dev/mimir/kustomization.yaml`. That wasn't a
 rollback -- it was a forward fix -- but it's the exact same delivery
 mechanism a rollback commit uses: edit (or revert), commit, push a feature
@@ -233,8 +233,8 @@ cycle.
 
 | Situation | Do this |
 | --- | --- |
-| Bad manifest/values/chart change, not yet causing an outage | `git revert`, push, force an ArgoCD refresh (section 1) |
-| Active outage, need it fixed right now | `argocd app rollback` first to stop the bleeding (section 2), **then immediately** `git revert` and push (section 1) |
+| Bad manifest/values/chart change, not yet causing an outage | `git revert`, open a PR and merge, force an ArgoCD refresh (section 1) |
+| Active outage, need it fixed right now | `argocd app rollback` first to stop the bleeding (section 2), **then immediately** `git revert`, open a PR and merge (section 1) |
 | Bad data written by a workload (wrong Postgres rows, corrupted Forgejo content, flipped Flagsmith flags) | Not a rollback problem -- see [`./backup-restore.md`](./backup-restore.md) |
 | A `workloads:build`-driven image change went bad | `git revert` the manifest/source change AND re-run `mise run workloads:build` against the old source (section 3) |
 | Whole cluster is a mess and you can't tell what's actually wrong anymore | Stop trying to roll back piecemeal -- see [`./disaster-recovery.md`](./disaster-recovery.md) for a full rebuild from git |
