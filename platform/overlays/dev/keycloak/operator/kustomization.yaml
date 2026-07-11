@@ -1,17 +1,4 @@
-# The Keycloak Operator + its four CRDs, in the new `keycloak` namespace.
-# `namespace: keycloak` is safe here -- only Operator resources
-# live in this sub-kustomization; the four CRDs and the Namespace itself are
-# cluster-scoped, so the namespace transformer skips them.
-#
-# All four CRDs (Keycloak, KeycloakRealmImport, KeycloakOIDCClient,
-# KeycloakSAMLClient) must install together even though this feature only
-# authors Keycloak/KeycloakRealmImport CRs: 26.7.0's operator Deployment
-# unconditionally registers JOSDK controllers/informers for all four kinds
-# (QUARKUS_OPERATOR_SDK_CONTROLLERS_*_NAMESPACES=JOSDK_WATCH_CURRENT for all
-# four in kubernetes.yml's Deployment env), so installing only two leaves the
-# operator pod CrashLoopBackOff on startup: "Couldn't start informer for
-# keycloaksamlclients.k8s.keycloak.org/v2alpha1 resources ... GET
-# .../keycloaksamlclients?resourceVersion=0. Message: Not Found."
+# The Keycloak Operator + its four CRDs
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: keycloak

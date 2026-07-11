@@ -1,7 +1,3 @@
-# The `keycloak` component of the `platform` layer. No blanket `namespace:`
-# transformer here -- the Database CR must carry metadata.namespace: storage
-# while everything else is in `keycloak`, so each authored CR declares its
-# own metadata.namespace explicitly (exactly as storage's authored CRs do).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:

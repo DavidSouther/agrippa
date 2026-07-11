@@ -1,4 +1,3 @@
-# The declarative KeycloakRealmImport for the `agrippa` dev realm.
 apiVersion: k8s.keycloak.org/v2beta1
 kind: KeycloakRealmImport
 metadata:
