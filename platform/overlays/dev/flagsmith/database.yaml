@@ -1,15 +1,3 @@
-# Wave -5 (not the design's literal wave-5 grouping -- see plan.md's Step 2
-# note, reviewed and cleared: the flagsmith api Deployment ships both a
-# migrate-db initContainer, always on by chart default, and (since this
-# component sets api.bootstrap.enabled: true) a bootstrap initContainer
-# running `manage.py waitfordb`, either of which blocks pod init forever if
-# the flagsmith database does not already exist -- at the design's original
-# wave 5 that is a genuine ArgoCD sync-wave deadlock, not a transient retry.
-# Moving the CR to wave -5 breaks the cycle: the CNPG operator and the
-# shared postgres Cluster are already live from storage's own Application
-# (sync-wave 1) before platform (sync-wave 2) starts, and this CR's own
-# dependencies (the operator, the Cluster, the flagsmith role below) need
-# nothing else from this component's own -10/0 waves.
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
 metadata:

@@ -1,84 +1,3 @@
-# Wave 0: the official Flagsmith chart, against the shared postgres
-# Cluster's flagsmith database/role (both already live -- Step 2, wave -5)
-# and the sealed database-url/secret-key credentials (also Step 2).
-#
-# BUILD-TIME FINDING (research:public, live-verified against the pulled
-# 0.82.0 chart's Chart.yaml/values.yaml/templates): the design/plan's
-# valuesInline sketch used `postgresql.enabled: false` to disable the
-# chart's bundled dev Postgres subchart. That key does not gate anything on
-# its own -- the subchart's Helm dependency `condition` is
-# `postgresql.enabled,devPostgresql.enabled` (an OR of the two), and
-# `devPostgresql.enabled` defaults to `true` in this chart's own
-# values.yaml. Setting only `postgresql.enabled: false` would leave the
-# bundled bitnami/postgresql subchart (and its own PVC/Deployment/Secret)
-# enabled by the still-true default. Corrected below to the key that
-# actually controls it: `devPostgresql.enabled: false`.
-#
-# BUILD-TIME FINDING: Service names/ports confirmed via
-# templates/service-api.yaml / service-frontend.yaml +
-# _helpers.tpl's flagsmith.fullname (releaseName "flagsmith" contains the
-# chart name "flagsmith", so fullname collapses to the bare release name):
-# flagsmith-api:8000, flagsmith-frontend:8080 -- matches the design's
-# "expected" guess exactly; no correction needed for Step 4's HTTPRoute.
-#
-# BUILD-TIME FINDING: the chart's own readinessProbe uses
-# `/health/readiness/` (django-health-check, DB-gated) rather than the
-# design's assumed bare `/health` -- confirmed via values.yaml
-# `api.readinessProbe`. That turned out not to require any correction: a
-# live in-cluster curl (recorded in Step 4's httproute.yaml) found the
-# API's bare `/health` is *also* a DB-gated django-health-check view
-# (same DatabaseBackend/MigrationsHealthCheck as `/health/readiness/`),
-# so the design's original `/health` assumption and
-# tests/feature-flags.bats' existing HEALTH_PATH default both stand
-# unchanged.
-#
-# BUILD-TIME FINDING: no `skipTests: true` workaround is needed here (unlike
-# Valkey/Forgejo) -- this chart's `tests.enabled` already defaults to
-# `false`, so no helm.sh/hook: test Pod renders regardless.
-#
-# BUILD-TIME FINDING: this chart's templates explicitly stamp
-# metadata.namespace via the `flagsmith.namespace` helper (defaulting to
-# `.Release.Namespace`) on every object our config actually renders, so the
-# kustomize#6058 helmCharts-namespace-stamping regression that hit Valkey
-# does NOT reproduce here (same conclusion Forgejo's build reached for its
-# own chart) -- no scoped `patches:` workaround needed; live-confirmed below.
-#
-# BUILD-TIME FINDING: `DJANGO_ALLOWED_HOSTS` is hardcoded to `'*'` in this
-# chart's own `_api_environment.yaml` (not a values-exposed key) -- the
-# design's flagged allowed-hosts risk does not apply; no override needed.
-#
-# BUILD-TIME FINDING: no bundled influxdb/analytics subchart is enabled by
-# this chart's own defaults (`influxdbExternal.enabled: false`,
-# `UsePostgresForAnalytics.enabled: false` both default off) -- confirmed,
-# no explicit disable needed.
-#
-# BUILD-TIME FINDING (caught by a real local `--enable-helm` render, not by
-# reading values.yaml alone): `hpa.sse.enabled` defaults to `true` even
-# though `sse.enabled` defaults to `false` -- an inconsistent chart default.
-# With sse disabled, no `flagsmith-sse` Deployment ever renders, so the
-# still-rendered `flagsmith-sse-hpa` HorizontalPodAutoscaler targets a
-# nonexistent scaleTargetRef and would sit in a permanent
-# `AbleToScale: False` condition -- exactly the shape of resource ArgoCD's
-# own HPA health check reports as Degraded. `hpa.sse.enabled: false` added
-# explicitly below to suppress it.
-#
-# `resources:` scoped to a dev-appropriate footprint proactively (the same
-# precedent Auth's Keycloak-operator and Git-hosting's Forgejo builds both
-# applied) -- node headroom is ample, but an unbounded request-less
-# container is still a noisy-neighbor risk on this single-node dev
-# cluster's growing footprint (Istio, cert-manager, metallb, CNPG, Valkey,
-# the full LGTM stack, Keycloak, Forgejo, now Flagsmith).
-#
-# BUILD-TIME FINDING (caught live, not by static review): the chart's own
-# commented-out example (limits.memory: 500Mi) OOMKilled the api container
-# (exitCode 137) seconds after its first successful startup -- confirmed
-# via `kubectl -n flagsmith get pods` showing `lastState.terminated.reason:
-# OOMKilled` and the pod's steady-state usage (~245Mi) sitting well under
-# the limit, meaning the kill hit a transient startup spike (gunicorn
-# worker fan-out atop the migrate-db/bootstrap initContainers), not a
-# sustained leak. Raised to 1Gi -- the dev node has ample headroom (46%
-# memory allocated pre-fix) -- and re-verified stable (no further restarts,
-# repeated /health 200s) after the bump.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 commonAnnotations:
@@ -90,6 +9,9 @@ helmCharts:
     releaseName: flagsmith
     namespace: flagsmith
     valuesInline:
+      # Not postgresql.enabled -- the bundled subchart's dependency condition
+      # is `postgresql.enabled,devPostgresql.enabled` (an OR), and
+      # devPostgresql.enabled defaults true, so only this key disables it.
       devPostgresql:
         enabled: false
       databaseExternal:
@@ -125,5 +47,8 @@ helmCharts:
       sse:
         enabled: false
       hpa:
+        # hpa.sse.enabled defaults true even though sse.enabled defaults
+        # false, so without this override the HPA targets a Deployment that
+        # never renders and sits permanently AbleToScale: False.
         sse:
           enabled: false
