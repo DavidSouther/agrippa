@@ -7,7 +7,8 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "2"
     # See apps/core.yaml:9-14 and argoproj/argo-cd#22151. Here it additionally
-    # mispredicts Keycloak's two webhook-defaulted CRDs.
+    # mispredicts the keycloaks.k8s.keycloak.org CRD's schema-defaulted fields
+    # (structural-schema `default:`, not a webhook -- this Operator ships none).
     argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: default
