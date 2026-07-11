@@ -1,9 +1,9 @@
 # Testing a change to an application
 
 How to safely test a change to any component of `agrippa-dev` before and after
-it lands. This is a solo-operator, single dev cluster: no staging environment,
-no feature branches, no PR review. The safety net is local render-checking
-before push, then a component's own bats probe after ArgoCD reconciles.
+it lands. This is a solo-operator, single dev cluster with no staging
+environment. The safety net is local render-checking before push, a reviewed
+pull request, then a component's own bats probe after ArgoCD reconciles.
 
 Point `kubectl` at the cluster once per shell before anything below:
 
@@ -42,16 +42,20 @@ push, watch ArgoCD reconcile, run the acceptance probe.
    mise run test:static
    ```
 
-4. Commit and push straight to `origin/main`. This repo's established
-   convention: no feature branches, no PRs, confirmed operator convention.
+4. Commit on a feature branch, push it, and open a pull request into `main`.
    Use Conventional Commits (`fix`/`feat`/`chore`, scoped `core`/`store`/
    `otel`/`plat`/`work` per `DEVELOPMENT.md`).
 
    ```bash
+   git checkout -b fix/<component>-<short-description>
    git add <layer>/overlays/dev/<component>
    git commit -m "fix(<scope>): <what and why>"
-   git push origin main
+   git push -u origin fix/<component>-<short-description>
+   gh pr create --base main --fill
    ```
+
+   ArgoCD only reconciles the change once the pull request is reviewed and
+   merged into `main`.
 
 5. Watch ArgoCD reconcile the layer:
 
@@ -316,9 +320,10 @@ still points at a cached tag) before suspecting the Gateway or route.
 
 ## If a test fails after you push
 
-Since every push goes straight to `origin/main` with no staging environment,
-a failing acceptance probe after a sync means the failure is live on the only
-cluster you have. Don't iterate blind:
+Since every merge to `main` reconciles onto the only cluster this platform
+has, with no staging environment to catch a bad change first, a failing
+acceptance probe after a sync means the failure is live. Don't iterate
+blind:
 
 - For diagnosing what's actually broken, see `./incident-response.md`.
 - For getting back to a known-good state while you investigate, see

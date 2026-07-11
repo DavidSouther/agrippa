@@ -284,15 +284,20 @@ afterward.
    For example, `kustomize build --enable-helm platform/overlays/dev/flagsmith`.
    This catches a malformed values block before it ever reaches ArgoCD.
 
-3. **Commit and push** with a Conventional Commit, scope matching the
-   component's layer (`plat` for Keycloak/Flagsmith, `otel` for
-   Mimir/Loki/Grafana/Tempo/Alloy -- see `DEVELOPMENT.md`):
+3. **Commit, push a feature branch, and open a pull request** with a
+   Conventional Commit, scope matching the component's layer (`plat` for
+   Keycloak/Flagsmith, `otel` for Mimir/Loki/Grafana/Tempo/Alloy -- see
+   `DEVELOPMENT.md`):
 
    ```bash
+   git checkout -b fix/<component>-resources
    git add <path>
    git commit -m "fix(plat): raise flagsmith API memory limit to 1Gi"
-   git push origin main
+   git push -u origin fix/<component>-resources
+   gh pr create --base main --fill
    ```
+
+   Merge the reviewed pull request into `main` before moving to step 4.
 
 4. **Watch the pod restart with the new values:**
 

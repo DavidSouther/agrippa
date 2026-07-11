@@ -112,19 +112,22 @@ For a smaller bump, eyeballing the `kustomize build` output for unexpected
 `kind:`/`metadata.name` entries is often enough and the stash dance can be
 skipped.
 
-### Step 5: commit and push
+### Step 5: commit, push a feature branch, and open a pull request
 
-This repo's established convention: straight to `origin/main`, no
-branches or PRs. Use a Conventional Commit with the scope matching the
-chart's layer (`core` for Istio, `store` for CloudNativePG/Valkey, `plat`
-for Forgejo/Flagsmith/Keycloak, `otel` for Loki/Tempo/Grafana/Mimir/Alloy
--- see `DEVELOPMENT.md`).
+Use a Conventional Commit with the scope matching the chart's layer
+(`core` for Istio, `store` for CloudNativePG/Valkey, `plat` for
+Forgejo/Flagsmith/Keycloak, `otel` for Loki/Tempo/Grafana/Mimir/Alloy --
+see `DEVELOPMENT.md`).
 
 ```bash
+git checkout -b chore/bump-<chart>-<new-version>
 git add <path-to-overlay-dir>/kustomization.yaml
 git commit -m "chore(<scope>): bump <chart> to <new-version>"
-git push origin main
+git push -u origin chore/bump-<chart>-<new-version>
+gh pr create --base main --fill
 ```
+
+Merge the reviewed pull request into `main` before moving on to step 6.
 
 ### Step 6: watch the owning ArgoCD layer Application reconcile
 
