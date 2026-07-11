@@ -88,11 +88,12 @@ kubectl -n argocd get applications \
   -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status
 ```
 
-Poll this every 10-15 seconds until all seven Applications
+Poll this every 10-15 seconds until all eight Applications
 (`root`, `argocd`, `core`, `storage`, `platform`, `observability`,
-`workloads`) show `Synced`/`Healthy`. They come up in sync-wave order,
-`core` (0) then `storage` (1) then `platform` (2) then `observability` (3)
-then `workloads` (4), because each layer depends on the one below it.
+`workloads-resume`, `workloads-trips`) show `Synced`/`Healthy`. They come up
+in sync-wave order, `core` (0) then `storage` (1) then `platform` (2) then
+`observability` (3) then `workloads-resume` and `workloads-trips` (4), because
+each layer depends on the one below it.
 
 Give this real time. This is a from-scratch install of Istio, cert-manager,
 CloudNativePG, Keycloak, Forgejo, Flagsmith, and the full LGTM observability
@@ -150,19 +151,32 @@ credential (re-decrypted fresh from the same Bitwarden-held `agrippa-age-dev`
 key). There is no drift to reconcile and nothing to reconstruct by hand,
 this is what GitOps parity buys you.
 
-What does **not** come back is any runtime data that existed only in the old
-cluster's PVCs: Forgejo repository content, Keycloak users and sessions
-beyond the declaratively-imported realm, Flagsmith flag values set at
-runtime through the admin UI, and Postgres rows in general. None of that is
-stored in git, so no rebuild, however clean, restores it.
+What does **not** come back automatically is any runtime data that existed
+only in the old cluster's PVCs. That data splits into two categories with very
+different exposure, and the distinction matters before you tear anything down.
 
-Today, that gap is real and mostly unaddressed. See
-[`./backup-restore.md`](./backup-restore.md) for the current, honestly
-limited, state of protecting that data. Until that story improves, treat a
-disaster-recovery rebuild as **also a data-loss event** for anything not
-declared in git. If the cluster is in trouble because of bad data rather
-than a broken deploy, read `./backup-restore.md` before you run
-`mise run cluster:down`, not after.
+Postgres row data now has a real automated backup and point-in-time recovery
+path. Keycloak users and sessions beyond the declaratively-imported realm,
+Flagsmith flag values set at runtime through the admin UI, Forgejo's metadata,
+and database rows in general are all captured by CloudNativePG's continuous WAL
+archiving and scheduled base backups to a dedicated `minio-backup` MinIO
+instance. A clean rebuild does not replay that data for you, but the archive is
+there to recover from. See
+[`./backup-restore.md`](./backup-restore.md) sections 2 and 4 for how it is
+configured and how to restore a cluster from it.
+
+Two things still have no backup at all: Forgejo's git content (the
+`gitea-shared-storage` PVC, holding every commit, branch, blob, and LFS
+object, entirely separate from the Postgres metadata) and Valkey's cached
+state. Nothing backs either one up, so no rebuild, however clean, restores it.
+
+The catch this runbook cannot skip: `minio-backup` is itself a `local-path`
+PVC on the same single node as everything else. `mise run cluster:down`
+destroys the backup store along with the Postgres primary it protects. The
+archive only helps you if you recover from it, or copy it off-node, **before**
+you tear the cluster down, not after. If the cluster is in trouble because of
+bad data rather than a broken deploy, read `./backup-restore.md` and act on
+`minio-backup` before you run `mise run cluster:down`.
 
 ## 4. Why this is cheap here
 

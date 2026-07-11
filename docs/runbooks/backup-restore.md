@@ -349,7 +349,7 @@ about.
 | --- | --- |
 | Whole cluster destroyed or rebuilt from scratch | Git, via `mise run cluster:up` + `mise run bootstrap`; see [`./disaster-recovery.md`](./disaster-recovery.md). Declarative state only. |
 | Bad Postgres rows / dropped table in `keycloak`/`forgejo`/`flagsmith`/`smoke` | Automated CNPG backup: bootstrap a new Cluster with `recovery` + `recoveryTarget.targetTime` to just before the damage (section 4). |
-| Lost the `postgres-1` PVC or its node | Automated CNPG backup restores from MinIO, as long as the `minio-backup` PVC / node survived (section 4). |
+| Lost the `postgres-1` PVC (node survives) | Automated CNPG backup restores from MinIO, as long as the `minio-backup` PVC / node survived (section 4). |
 | Need a portable SQL export of one database | `pg_dump` per database (section 5), restored per section 6. |
 | Need a whole-cluster consistent Postgres capture | The physical backup in section 2; `pg_dumpall` still doesn't work (no exposed superuser, section 5). |
 | Lost the `minio-backup` PVC / its node too | Backups on it are gone; off-cluster durability of MinIO is still deferred (section 3). |
